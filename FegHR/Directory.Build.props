@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- Defaults for every FegHR project. The shared projects under
+       SharedServices/ (Shared.Time, Shared.Logging) keep their own settings:
+       MSBuild resolves Directory.Build.props from each project's own folder. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- XML docs are encouraged, not required on every member. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

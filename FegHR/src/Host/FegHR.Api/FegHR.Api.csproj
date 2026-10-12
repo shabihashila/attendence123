@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>FegHR.Api</RootNamespace>
+    <UserSecretsId>feghr-api-4f2a9c17</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\BuildingBlocks\FegHR.SharedKernel\FegHR.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\FegHR.SharedServices.Clients\FegHR.SharedServices.Clients.csproj" />
+    <ProjectReference Include="..\..\..\..\SharedServices\Shared.Logging\Shared.Logging.csproj" />
+    <ProjectReference Include="..\..\Modules\Platform\FegHR.Modules.Platform\FegHR.Modules.Platform.csproj" />
+    <ProjectReference Include="..\..\Modules\Iam\FegHR.Modules.Iam\FegHR.Modules.Iam.csproj" />
+    <ProjectReference Include="..\..\Modules\Organization\FegHR.Modules.Organization\FegHR.Modules.Organization.csproj" />
+    <ProjectReference Include="..\..\Modules\Attendance\FegHR.Modules.Attendance\FegHR.Modules.Attendance.csproj" />
+    <ProjectReference Include="..\..\Modules\Leave\FegHR.Modules.Leave\FegHR.Modules.Leave.csproj" />
+    <ProjectReference Include="..\..\Modules\Reporting\FegHR.Modules.Reporting\FegHR.Modules.Reporting.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    Module boundary guard (ARCHITECTURE.md section 3, rule 2).
+
+    A module implementation project (FegHR.Modules.X) is private to
+    its module. Only the host and the test project may reference one. Every
+    other project, including another module and any .Contracts project, may
+    reference only .Contracts projects. The build fails on a violation so the
+    boundary cannot erode quietly.
+  -->
+  <Target Name="FegHRModuleBoundaryGuard" BeforeTargets="ResolveProjectReferences"
+          Condition="'$(MSBuildProjectName)' != 'FegHR.Api' And !$(MSBuildProjectName.EndsWith('.Tests'))">
+    <ItemGroup>
+      <_DrForbiddenModuleReference Include="@(ProjectReference)"
+          Condition="$([System.String]::Copy('%(Filename)').StartsWith('FegHR.Modules.'))
+                     And !$([System.String]::Copy('%(Filename)').EndsWith('.Contracts'))" />
+    </ItemGroup>
+    <Error Condition="'@(_DrForbiddenModuleReference)' != ''"
+           Text="Module boundary violation: $(MSBuildProjectName) references module implementation '%(_DrForbiddenModuleReference.Filename)'. Reference its .Contracts project instead (docs/ARCHITECTURE.md section 3)." />
+  </Target>
+
+</Project>

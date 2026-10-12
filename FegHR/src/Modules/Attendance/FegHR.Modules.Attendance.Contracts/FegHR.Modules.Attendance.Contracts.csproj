@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The public surface of the Attendance module: interfaces, DTOs and integration
+       events other modules may use. No implementation and no persistence here. -->
+  <PropertyGroup>
+    <RootNamespace>FegHR.Modules.Attendance.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\FegHR.SharedKernel\FegHR.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

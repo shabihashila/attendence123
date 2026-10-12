@@ -1,0 +1,127 @@
+/* FegHR additions on top of the Sakai layout. Component styling stays with PrimeNG and Tailwind. */
+
+
+
+/* The company's logo and styled name in the top bar. */
+
+.layout-topbar .layout-topbar-logo {
+
+    gap: 0.6rem;
+
+    font-size: 1.35rem;
+
+    font-weight: 600;
+
+}
+
+
+
+/* Native colour inputs used by the branding editors. */
+
+input[type='color'] {
+
+    width: 2.25rem;
+
+    height: 2.25rem;
+
+    padding: 2px;
+
+    border: 1px solid var(--surface-border);
+
+    border-radius: var(--content-border-radius);
+
+    background: var(--surface-card);
+
+    cursor: pointer;
+
+}
+
+
+
+/* Tables scroll sideways on a phone instead of squeezing their columns. */
+
+.card .p-datatable {
+
+    overflow-x: auto;
+
+}
+
+
+
+/* Near-black or near-white letters of a styled name follow the theme, so the name stays readable
+
+   after a dark/light switch. Accent colours and highlighted text keep the colour that was chosen. */
+
+:root {
+
+    --brand-neutral-color: #111827;
+
+}
+
+:root.app-dark {
+
+    --brand-neutral-color: #f9fafb;
+
+}
+
+.ql-editor .brand-neutral-text {
+
+    color: var(--brand-neutral-color) !important;
+
+}
+
+
+
+/* Floating labels, as in DailyCommerce: the label sits inside the empty field and moves onto the
+
+   border on focus or once there is a value. A placeholder is hidden until the field has focus,
+
+   so the label and the placeholder never share the same space. */
+
+.p-floatlabel {
+
+    display: block;
+
+}
+
+.p-floatlabel input::placeholder,
+
+.p-floatlabel textarea::placeholder,
+
+.p-floatlabel .p-select-label.p-placeholder,
+
+.p-floatlabel .p-multiselect-label.p-placeholder {
+
+    opacity: 0;
+
+}
+
+.p-floatlabel input:focus::placeholder,
+
+.p-floatlabel textarea:focus::placeholder,
+
+.p-floatlabel .p-select.p-focus .p-select-label.p-placeholder,
+
+.p-floatlabel .p-multiselect.p-focus .p-multiselect-label.p-placeholder {
+
+    opacity: 1;
+
+}
+
+/* Filters in a page header keep a sensible width instead of collapsing to their label. */
+
+app-page-header .p-floatlabel {
+
+    display: inline-block;
+
+    min-width: 11rem;
+
+}
+
+app-page-header .p-floatlabel .p-select,
+
+app-page-header .p-floatlabel input {
+
+    width: 100%;
+
+}

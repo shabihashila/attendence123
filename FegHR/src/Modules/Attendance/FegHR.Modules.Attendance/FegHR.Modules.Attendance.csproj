@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>FegHR.Modules.Attendance</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FegHR.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\FegHR.SharedKernel\FegHR.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\FegHR.SharedServices.Clients\FegHR.SharedServices.Clients.csproj" />
+    <ProjectReference Include="..\FegHR.Modules.Attendance.Contracts\FegHR.Modules.Attendance.Contracts.csproj" />
+    <ProjectReference Include="..\..\Platform\FegHR.Modules.Platform.Contracts\FegHR.Modules.Platform.Contracts.csproj" />
+    <ProjectReference Include="..\..\Organization\FegHR.Modules.Organization.Contracts\FegHR.Modules.Organization.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

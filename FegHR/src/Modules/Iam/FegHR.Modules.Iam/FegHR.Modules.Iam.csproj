@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>FegHR.Modules.Iam</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FegHR.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\FegHR.SharedKernel\FegHR.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\FegHR.SharedServices.Clients\FegHR.SharedServices.Clients.csproj" />
+    <ProjectReference Include="..\FegHR.Modules.Iam.Contracts\FegHR.Modules.Iam.Contracts.csproj" />
+    <ProjectReference Include="..\..\Platform\FegHR.Modules.Platform.Contracts\FegHR.Modules.Platform.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

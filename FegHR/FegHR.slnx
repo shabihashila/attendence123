@@ -1,0 +1,37 @@
+<Solution>
+  <Folder Name="/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/FegHR.SharedKernel/FegHR.SharedKernel.csproj" />
+    <Project Path="src/BuildingBlocks/FegHR.SharedServices.Clients/FegHR.SharedServices.Clients.csproj" />
+  </Folder>
+  <Folder Name="/Host/">
+    <Project Path="src/Host/FegHR.Api/FegHR.Api.csproj" />
+  </Folder>
+  <Folder Name="/Modules/" />
+  <Folder Name="/Modules/Attendance/">
+    <Project Path="src/Modules/Attendance/FegHR.Modules.Attendance.Contracts/FegHR.Modules.Attendance.Contracts.csproj" />
+    <Project Path="src/Modules/Attendance/FegHR.Modules.Attendance/FegHR.Modules.Attendance.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Iam/">
+    <Project Path="src/Modules/Iam/FegHR.Modules.Iam.Contracts/FegHR.Modules.Iam.Contracts.csproj" />
+    <Project Path="src/Modules/Iam/FegHR.Modules.Iam/FegHR.Modules.Iam.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Leave/">
+    <Project Path="src/Modules/Leave/FegHR.Modules.Leave.Contracts/FegHR.Modules.Leave.Contracts.csproj" />
+    <Project Path="src/Modules/Leave/FegHR.Modules.Leave/FegHR.Modules.Leave.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Organization/">
+    <Project Path="src/Modules/Organization/FegHR.Modules.Organization.Contracts/FegHR.Modules.Organization.Contracts.csproj" />
+    <Project Path="src/Modules/Organization/FegHR.Modules.Organization/FegHR.Modules.Organization.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Platform/">
+    <Project Path="src/Modules/Platform/FegHR.Modules.Platform.Contracts/FegHR.Modules.Platform.Contracts.csproj" />
+    <Project Path="src/Modules/Platform/FegHR.Modules.Platform/FegHR.Modules.Platform.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Reporting/">
+    <Project Path="src/Modules/Reporting/FegHR.Modules.Reporting/FegHR.Modules.Reporting.csproj" />
+  </Folder>
+  <Folder Name="/SharedServices/">
+    <Project Path="../SharedServices/Shared.Logging/Shared.Logging.csproj" />
+    <Project Path="../SharedServices/Shared.Time/Shared.Time.csproj" />
+  </Folder>
+</Solution>
