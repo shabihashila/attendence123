@@ -17,6 +17,7 @@ GO
 :r 11_OwnerCompany.sql
 
 :r 12_CompanyHierarchy.sql
+:r 13_CompanyManagement.sql
 :r SeedData/01_Metadata.sql
 COMMIT TRANSACTION;
 GO

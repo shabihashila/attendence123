@@ -12,6 +12,12 @@ import { Option } from '../crud';
 
 interface Company {
 
+    parentTenantRefId: number | null;
+    parentName: string | null;
+    maxChildConcerns: number | null;
+    childCount: number;
+    rowVersion: string;
+
     id: number;
 
     slug: string;
@@ -102,13 +108,21 @@ interface Policy {
 
             <p-table [value]="rows()" [loading]="loading()" [lazy]="true" [paginator]="true" [rows]="pageSize" [totalRecords]="total()" (onLazyLoad)="onLazy($event)" stripedRows [tableStyle]="{ 'min-width': '58rem' }">
 
-                <ng-template #header><tr><th>Company</th><th>Contact</th><th>Registered</th><th>Status</th><th>Licence</th><th style="width:17rem"></th></tr></ng-template>
+                <ng-template #header><tr><th>Company</th><th>Concerns</th><th>Contact</th><th>Registered</th><th>Status</th><th>Licence</th><th style="width:25rem"></th></tr></ng-template>
 
                 <ng-template #body let-c>
 
                     <tr>
 
                         <td><span class="font-medium">{{ c.name }}</span>@if (c.isOwnerCompany) { <p-tag value="Owner company" severity="contrast" styleClass="ml-2" /> }<div class="text-muted-color text-sm">{{ c.slug }}</div></td>
+
+                        <td>
+                            @if (c.parentTenantRefId !== null) {
+                                <p-tag value="Child concern" severity="secondary" /><div class="text-sm mt-1">{{ c.parentName }}</div>
+                            } @else {
+                                <p-tag value="Main company" severity="info" /><div class="text-sm mt-1">{{ c.childCount }} / {{ c.maxChildConcerns === null ? 'Unlimited' : c.maxChildConcerns }} concerns</div>
+                            }
+                        </td>
 
                         <td>{{ c.email || '—' }}<div class="text-muted-color text-sm">{{ c.phone }}</div></td>
 
@@ -138,6 +152,11 @@ interface Policy {
 
                         <td class="text-right whitespace-nowrap">
 
+                            <p-button label="Edit" icon="pi pi-pencil" size="small" [outlined]="true" (onClick)="editCompany(c)" />
+                            @if (c.parentTenantRefId === null) {
+                                <p-button label="Add concern" icon="pi pi-plus" size="small" [outlined]="true" styleClass="ml-2" (onClick)="addConcern(c)" [disabled]="c.status !== 'Active' || (c.maxChildConcerns !== null && c.childCount >= c.maxChildConcerns)" />
+                            }
+
                             @if (!c.isOwnerCompany) { <p-button label="Licences" icon="pi pi-key" size="small" [outlined]="true" (onClick)="openLicences(c)" /> }
 
                             <p-button label="Open" icon="pi pi-sign-in" size="small" severity="secondary" [outlined]="true" styleClass="ml-2" (onClick)="enter(c)" [disabled]="c.status !== 'Active'" />
@@ -150,11 +169,28 @@ interface Policy {
 
                 </ng-template>
 
-                <ng-template #emptymessage><tr><td colspan="6" class="text-center text-muted-color py-8">No companies yet.</td></tr></ng-template>
+                <ng-template #emptymessage><tr><td colspan="7" class="text-center text-muted-color py-8">No companies yet.</td></tr></ng-template>
 
             </p-table>
 
         </div>
+
+        <p-dialog [(visible)]="companyDialog" [header]="creatingConcern ? 'Add child concern to ' + editingCompany?.name : 'Edit company'" [modal]="true" [style]="{ width: '36rem' }" [breakpoints]="{ '720px': '95vw' }">
+            <form class="flex flex-col gap-4 pt-2" (ngSubmit)="saveCompany()" #companyForm="ngForm">
+                <p-floatlabel variant="on"><input pInputText id="companyName" name="companyName" [(ngModel)]="companyName" required minlength="2" maxlength="200" fluid /><label for="companyName">Registered company name *</label></p-floatlabel>
+                @if (creatingConcern) {
+                    <p class="text-muted-color m-0">This concern will have its own users, employees, attendance, leave and trial licence. Open it after saving to create its staff accounts.</p>
+                } @else {
+                    <p-floatlabel variant="on"><p-select inputId="parentCompany" name="parentCompany" [options]="parentOptions()" optionLabel="label" optionValue="value" [(ngModel)]="parentCompanyId" [disabled]="!!editingCompany?.isOwnerCompany || (editingCompany?.childCount ?? 0) > 0" appendTo="body" fluid /><label for="parentCompany">Main company</label></p-floatlabel>
+                    @if (parentCompanyId === null) {
+                        <p-floatlabel variant="on"><input pInputText id="concernLimit" name="concernLimit" type="number" [(ngModel)]="concernLimit" min="0" max="2147483647" step="1" fluid /><label for="concernLimit">Maximum child concerns</label></p-floatlabel>
+                        <small class="text-muted-color">Blank means unlimited; zero prevents additions. All attached concerns count, including suspended ones. The limit cannot be below the current count.</small>
+                    }
+                    <small class="text-muted-color">Choose Standalone main company to remove a parent. Changing the name keeps the company ID, slug and branding name.</small>
+                }
+                <div class="flex justify-end gap-2"><p-button label="Cancel" severity="secondary" [text]="true" (onClick)="companyDialog = false" /><p-button type="submit" label="Save" icon="pi pi-check" [loading]="saving()" [disabled]="companyForm.invalid || saving()" /></div>
+            </form>
+        </p-dialog>
 
 
 
@@ -241,6 +277,61 @@ export class OwnerCompaniesPage {
     dialog = false;
 
     current: Company | null = null;
+
+    companyDialog = false;
+    creatingConcern = false;
+    editingCompany: Company | null = null;
+    companyName = '';
+    parentCompanyId: number | null = null;
+    concernLimit: number | null = null;
+    mainCompanies = signal<{ id: number; name: string }[]>([]);
+
+    parentOptions() {
+        const options: { label: string; value: number | null }[] = [{ label: 'Standalone main company', value: null }];
+        options.push(...this.mainCompanies().filter((c) => c.id !== this.editingCompany?.id).map((c) => ({ label: c.name, value: c.id })));
+        // Preserve an existing suspended parent while renaming its concern.
+        if (this.editingCompany?.parentTenantRefId != null && !options.some((o) => o.value === this.editingCompany!.parentTenantRefId))
+            options.push({ label: this.editingCompany.parentName || 'Current main company', value: this.editingCompany.parentTenantRefId });
+        return options;
+    }
+
+    async editCompany(company: Company) {
+        try {
+            this.mainCompanies.set(await this.api.get<{ id: number; name: string }[]>('/api/owner/companies/main'));
+            this.editingCompany = company;
+            this.creatingConcern = false;
+            this.companyName = company.name;
+            this.parentCompanyId = company.parentTenantRefId;
+            this.concernLimit = company.maxChildConcerns;
+            this.companyDialog = true;
+        } catch (e) { this.notify.fail(e); }
+    }
+
+    addConcern(company: Company) {
+        this.editingCompany = company;
+        this.creatingConcern = true;
+        this.companyName = '';
+        this.companyDialog = true;
+    }
+
+    async saveCompany() {
+        if (!this.editingCompany) return;
+        if (!this.creatingConcern && this.concernLimit !== null && (!Number.isInteger(this.concernLimit) || this.concernLimit < 0)) {
+            this.notify.fail(new Error('Enter a whole-number limit of zero or more.'));
+            return;
+        }
+        this.saving.set(true);
+        try {
+            const id = this.editingCompany.id;
+            const result = this.creatingConcern
+                ? await this.api.post(`/api/owner/companies/${id}/concerns`, { name: this.companyName.trim() })
+                : await this.api.put(`/api/owner/companies/${id}`, { name: this.companyName.trim(), parentTenantRefId: this.parentCompanyId, maxChildConcerns: this.concernLimit, rowVersion: this.editingCompany.rowVersion });
+            this.notify.ok(result.message);
+            this.companyDialog = false;
+            await Promise.all([this.load(), this.api.loadShell()]);
+        } catch (e) { this.notify.fail(e); }
+        finally { this.saving.set(false); }
+    }
 
     kinds = ['Paid', 'Complimentary', 'Trial'];
 

@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Caching.Memory;
 using Shared.Time;
 
@@ -19,7 +21,15 @@ internal sealed record LicenseView(bool IsLicensed, string? Kind, string? PlanNa
 
 internal sealed record OwnerCompanyDto(int Id, string Slug, string Name, string? Phone, string? Email, string Status,
     string Origin, DateTimeOffset CreatedAt, bool IsLicensed, string? LicenseKind, string? PlanName, DateTimeOffset? LicenseEndsAt,
-    bool IsOwnerCompany);
+    bool IsOwnerCompany, int? ParentTenantRefId, string? ParentName, int? MaxChildConcerns, int ChildCount, string RowVersion);
+
+internal sealed record SaveCompanyRequest(
+    [property: Required, StringLength(200, MinimumLength = 2)] string Name,
+    [property: Range(1, int.MaxValue)] int? ParentTenantRefId,
+    [property: Range(0, int.MaxValue)] int? MaxChildConcerns,
+    [property: Required] string RowVersion);
+
+internal sealed record CreateConcernRequest([property: Required, StringLength(200, MinimumLength = 2)] string Name);
 
 internal sealed record SetCompanyStatusRequest(
     [property: Required, RegularExpression("^(Active|Suspended|Closed)$", ErrorMessage = "Choose Active, Suspended or Closed.")] string Status);
@@ -74,11 +84,51 @@ internal static class LicenseEndpoints
             {
                 var rows = await procedures.OwnerListTenantsAsync(clock.UtcNowOffset(), page.Search, page.Skip, page.SafePageSize, ct);
                 var items = rows.Select(r => new OwnerCompanyDto(r.Id, r.Slug, r.Name, r.Phone, r.Email, r.Status, r.Origin,
-                    r.CreatedAt, r.IsLicensed, r.LicenseKind, r.PlanName, r.LicenseEndsAt, r.IsOwnerCompany)).ToList();
+                    r.CreatedAt, r.IsLicensed, r.LicenseKind, r.PlanName, r.LicenseEndsAt, r.IsOwnerCompany,
+                    r.ParentTenantRefId, r.ParentName, r.MaxChildConcerns, r.ChildCount, Convert.ToBase64String(r.RowVersion))).ToList();
                 return ApiResults.Ok(new PagedResult<OwnerCompanyDto>(items, rows.Count > 0 ? rows[0].TotalCount : 0,
                     page.SafePage, page.SafePageSize));
             })
             .WithName("OwnerListCompanies");
+
+        owner.MapGet("/companies/main", async (PlatformProcedures procedures, CancellationToken ct) =>
+                ApiResults.Ok(await procedures.OwnerListMainCompaniesAsync(ct)))
+            .WithName("OwnerListMainCompanies");
+
+        owner.MapPut("/companies/{id:int}", async (int id, SaveCompanyRequest request, PlatformProcedures procedures,
+                ITenantContext tenant, IAppTimeProvider clock, CancellationToken ct) =>
+            {
+                if (request.Name.Trim().Length < 2 || request.Name.Any(char.IsControl))
+                    return ApiResults.Fail("Enter a company name of at least two characters without control characters.");
+                byte[] version;
+                try { version = Convert.FromBase64String(request.RowVersion); }
+                catch (FormatException) { return ApiResults.Fail("Reload the company before saving."); }
+                if (version.Length != 8) return ApiResults.Fail("Reload the company before saving.");
+                try
+                {
+                    await procedures.OwnerSaveTenantAsync(id, request.Name.Trim(), request.ParentTenantRefId,
+                        request.MaxChildConcerns, version, clock.UtcNowOffset(), tenant.UserId!.Value, ct);
+                }
+                catch (SqlException ex) when (ex.Number == 51062) { return ApiResults.Conflict(ex.Message); }
+                return ApiResults.Ok("Company saved.");
+            })
+            .Validate<SaveCompanyRequest>()
+            .WithName("OwnerSaveCompany");
+
+        owner.MapPost("/companies/{id:int}/concerns", async (int id, CreateConcernRequest request, PlatformProcedures procedures,
+                ITenantContext tenant, IAppTimeProvider clock, CancellationToken ct) =>
+            {
+                var name = request.Name.Trim();
+                if (name.Length < 2 || name.Any(char.IsControl))
+                    return ApiResults.Fail("Enter a company name of at least two characters without control characters.");
+                var slug = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+                if (slug.Length > 60) slug = slug[..60].TrimEnd('-');
+                var created = await procedures.OwnerCreateConcernAsync(id, name, slug.Length == 0 ? "company" : slug,
+                    clock.UtcNowOffset(), tenant.UserId!.Value, ct);
+                return ApiResults.Ok(created!, "Child concern created. Open it to add users and employees.");
+            })
+            .Validate<CreateConcernRequest>()
+            .WithName("OwnerCreateConcern");
 
         owner.MapPut("/companies/{id:int}/status", async (int id, SetCompanyStatusRequest request, PlatformProcedures procedures,
                 ITenantContext tenant, IMemoryCache cache, IAppTimeProvider clock, CancellationToken ct) =>

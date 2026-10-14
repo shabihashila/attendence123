@@ -58,3 +58,34 @@ The logo is bundled in `FegHR/Ui/FegHR.Ui/public/feg-technova-logo.png` and the 
 Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/Package-Source.ps1` to create `FEG-MICROSERVICES-source.zip`. It includes source, locked UI dependencies and SQL/install scripts, and excludes installed dependencies, builds, local secrets, stored files and test artifacts.
 
 See [architecture](docs/ARCHITECTURE.md). Inherited scope includes organization, attendance, leave, licensing, dynamic menus and the product owner console. Payroll and features present only in HRAccounts are outside this DailyHR fork.
+
+## Main companies and child concerns
+
+Product Owner → Companies groups child concerns beside their main company. **Edit** changes the
+registered company name, main company assignment, and (for main companies) maximum child concerns.
+Names keep the same ID and slug; Company Branding remains separately editable. Blank limit means
+unlimited, zero blocks additions, and all attached concerns count, including suspended/closed ones.
+The Owner cannot lower a limit below the existing count. A company with children cannot become
+a child, and concerns cannot contain another level of concerns. Parent links do not grant access
+to another company's data; employees, users, attendance, leave and licences stay separate.
+
+**Add concern** creates a separate company under the selected main company, using the existing
+trial licence policy and default roles/attendance/leave settings. The Product Owner receives
+an administrator membership. Open the concern and use Administration → Users to add company
+administrators or employees, then link employee logins under Organization → Employees.
+Existing companies can be attached through **Edit → Main company**; choose **Standalone main
+company** to detach. Public registration continues to create standalone companies only.
+
+The versioned deployment includes `13_CompanyManagement.sql`. To upgrade only this feature on an
+existing local database, run from `FegHR/Database/release-1.0`:
+
+```powershell
+sqlcmd -S localhost -d db_feg_hr -E -C -b -I -i ..\..\..\tools\Upgrade-CompanyManagement.sql
+```
+
+Regression checks use a disposable database and refuse to replace any existing test database:
+
+```powershell
+$env:SeedTimestamp = [DateTimeOffset]::UtcNow.ToString('o')
+sqlcmd -S localhost -d master -E -C -b -I -i ..\..\..\tools\Test-CompanyManagement.sql
+```

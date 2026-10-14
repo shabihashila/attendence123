@@ -41,6 +41,23 @@ internal sealed class PlatformProcedures(ITenantDbConnectionFactory connections)
     public Task OwnerSetTenantStatusAsync(int tenantId, string status, DateTimeOffset now, int actorId, CancellationToken ct)
         => ExecuteAsync("platform.usp_Owner_Tenant_SetStatus", new { TenantId = tenantId, Status = status, Now = now, ActorId = actorId }, ct);
 
+    public Task<IReadOnlyList<MainCompanyRow>> OwnerListMainCompaniesAsync(CancellationToken ct)
+        => ListAsync<MainCompanyRow>("platform.usp_Owner_MainCompanies_List", null, ct);
+
+    public Task OwnerSaveTenantAsync(int tenantId, string name, int? parentTenantRefId, int? maxChildConcerns,
+        byte[] rowVersion, DateTimeOffset now, int actorId, CancellationToken ct)
+    {
+        var p = new DynamicParameters(new { TenantId = tenantId, Name = name, ParentTenantRefId = parentTenantRefId,
+            MaxChildConcerns = maxChildConcerns, Now = now, ActorId = actorId });
+        p.Add("RowVersion", rowVersion, DbType.Binary, size: 8);
+        return ExecuteAsync("platform.usp_Owner_Tenant_Save", p, ct);
+    }
+
+    public Task<CreatedConcern?> OwnerCreateConcernAsync(int parentTenantId, string name, string baseSlug,
+        DateTimeOffset now, int actorId, CancellationToken ct)
+        => FirstAsync<CreatedConcern>("platform.usp_Owner_Concern_Create",
+            new { ParentTenantId = parentTenantId, Name = name, BaseSlug = baseSlug, Now = now, ActorId = actorId }, ct);
+
     public Task<IReadOnlyList<OwnerLicenseRow>> OwnerListLicensesAsync(int tenantId, CancellationToken ct)
         => ListAsync<OwnerLicenseRow>("platform.usp_Owner_License_List", new { TenantId = tenantId }, ct);
 
@@ -91,6 +108,8 @@ internal sealed class PlatformProcedures(ITenantDbConnectionFactory connections)
 }
 
 internal sealed record RegistrationOffer(bool RegistrationOpen, int TrialDays, string PlanName);
+internal sealed record MainCompanyRow(int Id, string Name);
+internal sealed record CreatedConcern(int Id, string Slug, DateTimeOffset TrialEndsAt);
 
 internal sealed class OwnerTenantRow
 {
@@ -103,6 +122,10 @@ internal sealed class OwnerTenantRow
     public string Origin { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; }
     public byte[] RowVersion { get; set; } = [];
+    public int? ParentTenantRefId { get; set; }
+    public string? ParentName { get; set; }
+    public int? MaxChildConcerns { get; set; }
+    public int ChildCount { get; set; }
     public bool IsLicensed { get; set; }
     public bool IsOwnerCompany { get; set; }
     public string? LicenseKind { get; set; }
