@@ -29,6 +29,8 @@ interface Member {
     branchIds: number[];
 
     isProductOwner: boolean;
+    isGroupManaged: boolean;
+    isGroupProtected:boolean;
 
 }
 
@@ -122,7 +124,7 @@ const MODULES: Record<string, string> = { platform: 'Company', iam: 'Users and r
 
                         <td>
 
-                            @if (canWrite() && !m.isProductOwner) {
+                            @if (canWrite() && !m.isProductOwner && !m.isGroupProtected) {
 
                                 <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" (onClick)="open(m)" ariaLabel="Edit user" />
 

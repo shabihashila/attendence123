@@ -25,11 +25,9 @@ internal sealed class PermissionGenerations
 
 internal sealed class PermissionProvider(
     IamProcedures procedures,
-    ITenantContext tenant,
-    IMemoryCache cache,
-    PermissionGenerations generations) : IPermissionProvider
+    ITenantContext tenant) : IPermissionProvider
 {
-    private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
+    private IReadOnlySet<string>? _permissions;
 
     public async ValueTask<IReadOnlySet<string>> GetPermissionsAsync(int tenantId, int userId, CancellationToken ct = default)
     {
@@ -37,14 +35,15 @@ internal sealed class PermissionProvider(
         if (tenant.TenantId != tenantId)
             throw new InvalidOperationException("Permissions can only be read for the bound tenant.");
 
-        var key = $"perm:{tenantId}:{generations.Current(tenantId)}:{userId}";
-        if (cache.TryGetValue(key, out IReadOnlySet<string>? cached) && cached is not null)
-            return cached;
-
-        var codes = (await procedures.GetPermissionsAsync(userId, ct)).ToHashSet(StringComparer.Ordinal);
-        cache.Set(key, (IReadOnlySet<string>)codes, Ttl);
-        return codes;
+        // Request-local only: group changes and reparenting take effect on the next request.
+        return _permissions ??= (await procedures.GetPermissionsAsync(userId, ct)).ToHashSet(StringComparer.Ordinal);
     }
+}
+
+internal sealed class TenantAccessPolicy(IamProcedures procedures) : ITenantAccessPolicy
+{
+    public Task<bool> CanAccessAsync(int userId, int tenantId, bool isPlatformAdmin, CancellationToken ct = default)
+        => procedures.CanAccessAsync(userId, tenantId, isPlatformAdmin, ct);
 }
 
 /// <summary>

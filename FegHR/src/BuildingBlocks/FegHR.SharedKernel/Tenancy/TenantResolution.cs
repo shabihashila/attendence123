@@ -11,6 +11,11 @@ public interface ITenantHostResolver
     Task<int?> ResolveBySlugAsync(string slug, CancellationToken ct = default);
 }
 
+public interface ITenantAccessPolicy
+{
+    Task<bool> CanAccessAsync(int userId, int tenantId, bool isPlatformAdmin, CancellationToken ct = default);
+}
+
 /// <summary>
 /// Decides whether a staff user may operate the branch named in the
 /// <c>X-Branch-Id</c> header. Implemented by the Iam module. Runs after the

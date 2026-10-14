@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 
 import { Component, Directive, Injectable, Input, inject } from '@angular/core';
 
@@ -57,6 +58,7 @@ export class AlwaysFilled {}
 /** The PrimeNG pieces nearly every page uses. */
 
 export const UI = [
+    RouterLink,
 
     AlwaysFilled,
 

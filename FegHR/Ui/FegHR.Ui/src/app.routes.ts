@@ -95,6 +95,9 @@ export const appRoutes: Routes = [
 
 
             { path: 'admin/users', data: { permission: 'iam.users.read' }, loadComponent: () => import('./app/pages/admin/users').then((m) => m.UsersPage) },
+            { path: 'admin/group', data: { permission: 'group.console' }, loadComponent: () => import('./app/pages/admin/group').then((m) => m.GroupPage) },
+            { path: 'admin/settings', data: { permission: 'platform.settings.write', settingsOnly: true }, loadComponent: () => import('./app/pages/admin/group').then((m) => m.GroupPage) },
+            { path: 'admin/approval-workflow', data: { permission: 'leave.setup.write' }, loadComponent: () => import('./app/pages/leave/approval-settings').then((m) => m.ApprovalSettingsPage) },
 
             { path: 'admin/roles', data: { permission: 'iam.roles.read' }, loadComponent: () => import('./app/pages/admin/users').then((m) => m.RolesPage) },
 

@@ -31,6 +31,8 @@ interface Balance {
 }
 
 interface Application {
+    usesApprovalWorkflow:boolean;
+    approverUserId:number|null;
 
     id: number;
 
@@ -126,7 +128,9 @@ function stepLabel(a: Application): string {
 
     if (a.status !== 'Pending') return label(a.status);
 
-    return a.currentStep === 'Manager' ? 'With line manager' : 'With HR';
+    if (a.currentStep === 'Manager') return 'With line manager';
+    if (a.currentStep === 'HR') return 'With HR';
+    return a.currentStep === 'Final' ? 'Final Approver' : a.currentStep + ' Supervisor';
 
 }
 
@@ -428,7 +432,8 @@ export class MyLeavePage {
 
     imports: [...UI, PageHeader],
 
-    template: `<app-page-header title="Leave Applications" subtitle="A line manager approves first; HR gives the final approval. An application with no line manager goes straight to HR.">
+    template: `<app-page-header title="Leave Applications" subtitle="Applications follow their submitted approval route. Configured workflows use L1–L5 Supervisors and a Final Approver.">
+            @if (session.can('leave.setup.write')) { <p-button label="Approval workflow" routerLink="/app/admin/approval-workflow" icon="pi pi-sitemap" [outlined]="true" /> }
 
             <p-floatlabel variant="on"><p-select inputId="fltStatus" [options]="statuses" optionLabel="label" optionValue="value" [(ngModel)]="status" (onChange)="reload()" /><label for="fltStatus">Status</label></p-floatlabel>
 
@@ -470,6 +475,8 @@ export class MyLeavePage {
 
                         <td class="text-right whitespace-nowrap">
 
+                            <p-button label="History" [text]="true" size="small" (onClick)="showHistory(x)" />
+                            @if(x.status === 'Pending' && x.usesApprovalWorkflow && session.can('leave.setup.write')){<p-button label="Reassign" [text]="true" size="small" (onClick)="openReassign(x)" />}
                             @if (x.canDecide) {
 
                                 <p-button label="Approve" icon="pi pi-check" size="small" severity="success" (onClick)="decide(x, true)" />
@@ -522,11 +529,22 @@ export class MyLeavePage {
 
         </p-dialog>
 
+        <p-dialog [(visible)]="historyDialog" header="Approval history" [modal]="true" [style]="{ width: '48rem' }"><p-table [value]="history()"><ng-template #header><tr><th>Stage</th><th>Approver</th><th>Status</th><th>When</th><th>Remarks</th></tr></ng-template><ng-template #body let-h><tr><td>{{h.stage === 6 ? 'Final Approver' : 'L' + h.stage + ' Supervisor'}}</td><td>{{h.approver}}</td><td>{{h.status}}</td><td>{{h.decidedAt ? dateTime(h.decidedAt) : ''}}</td><td>{{h.remarks}}</td></tr></ng-template><ng-template #emptymessage><tr><td colspan="5">This application uses the original Manager/HR workflow.</td></tr></ng-template></p-table></p-dialog>
+        <p-dialog [(visible)]="reassignDialog" header="Reassign current approval" [modal]="true" [style]="{width:'36rem'}"><form class="flex flex-col gap-4" (ngSubmit)="saveReassign()" #reassignForm="ngForm"><p-select name="replacement" [options]="replacementOptions()" optionLabel="label" optionValue="value" [(ngModel)]="replacementId" required appendTo="body" placeholder="Choose active company member" /><textarea pTextarea name="reassignReason" [(ngModel)]="reassignReason" required maxlength="500" placeholder="Reason for reassignment"></textarea><p-button type="submit" label="Reassign and record reason" [disabled]="reassignForm.invalid || saving()" /></form></p-dialog>
         <p-dialog [(visible)]="dialog" header="Apply for leave on behalf" [modal]="true" [style]="{ width: '40rem' }" [breakpoints]="{ '720px': '95vw' }">${APPLY_FORM}</p-dialog>`
 
 })
 
 export class LeaveApplicationsPage {
+    reassignDialog=false; reassigning:Application|null=null; replacementId:number|null=null; reassignReason=''; replacementOptions=signal<{label:string;value:number}[]>([]);
+    async openReassign(a:Application){try{const members=await this.api.get<{userId:number;displayName:string;isActive:boolean}[]>('/api/iam/users');this.replacementOptions.set(members.filter(m=>m.isActive).map(m=>({label:m.displayName,value:m.userId})));this.reassigning=a;this.replacementId=null;this.reassignReason='';this.reassignDialog=true;}catch(e){this.notify.fail(e);}}
+    async saveReassign(){if(!this.reassigning)return;this.saving.set(true);try{await this.api.post(`/api/leave/applications/${this.reassigning.id}/reassign`,{newUserId:this.replacementId,reason:this.reassignReason,expectedApproverId:this.reassigning.approverUserId});this.notify.ok('Approval reassigned.');this.reassignDialog=false;await this.load();}catch(e){this.notify.fail(e);}finally{this.saving.set(false);}}
+    historyDialog = false;
+    history = signal<{stage:number;approver:string;status:string;decidedAt:string|null;remarks:string|null}[]>([]);
+    async showHistory(application:Application) {
+        try { this.history.set(await this.api.get<{stage:number;approver:string;status:string;decidedAt:string|null;remarks:string|null}[]>(`/api/leave/applications/${application.id}/history`)); this.historyDialog=true; }
+        catch(e) {this.notify.fail(e);}
+    }
 
     private api = inject(Api);
 

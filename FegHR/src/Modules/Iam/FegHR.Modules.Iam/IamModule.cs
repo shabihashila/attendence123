@@ -36,6 +36,7 @@ public sealed class IamModule : IModule
         services.AddSingleton<TokenService>();
         services.AddSingleton<PermissionGenerations>();
         services.AddScoped<IPermissionProvider, PermissionProvider>();
+        services.AddScoped<ITenantAccessPolicy, TenantAccessPolicy>();
         services.AddScoped<BranchAccessPolicy>();
         services.AddScoped<IBranchAccessPolicy>(sp => sp.GetRequiredService<BranchAccessPolicy>());
         services.AddScoped<AuthService>();

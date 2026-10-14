@@ -44,6 +44,7 @@ public sealed class PlatformModule : IModule
     {
         var group = routes.MapGroup("/api/platform").WithTags(Name);
         TenantEndpoints.Map(group, routes);
+        GroupEndpoints.Map(routes);
         BranchEndpoints.Map(group);
         BrandingEndpoints.Map(group, routes);
         PlatformBrandingEndpoints.Map(routes);

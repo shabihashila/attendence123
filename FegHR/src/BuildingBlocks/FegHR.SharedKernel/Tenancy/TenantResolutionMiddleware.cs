@@ -54,6 +54,23 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, IOptions<Te
 
         tenant.Bind(tenantId, userId, branchId, isPlatformAdmin, source);
 
+        if (source == TenantSource.StaffToken && userId is { } uid && tenantId is { } tid
+            && !http.Request.Path.StartsWithSegments("/api/iam/auth") && !http.Request.Path.StartsWithSegments("/api/iam/session"))
+        {
+            var access = http.RequestServices.GetRequiredService<ITenantAccessPolicy>();
+            if (!await access.CanAccessAsync(uid, tid, isPlatformAdmin, http.RequestAborted))
+            {
+                await WriteFailure(http, StatusCodes.Status403Forbidden, "Your access to this company is no longer active. Switch company or sign in again.");
+                return;
+            }
+            var requested = http.Request.Headers["X-Company-ID"].ToString();
+            if (!string.IsNullOrEmpty(requested) && requested != tid.ToString())
+            {
+                await WriteFailure(http, StatusCodes.Status403Forbidden, "Switch company before requesting another company's data.");
+                return;
+            }
+        }
+
         if (tenant.BranchId is { } requestedBranch && tenant.UserId is { } staffUserId && tenant.TenantId is > 0)
         {
             var policy = http.RequestServices.GetService<IBranchAccessPolicy>();

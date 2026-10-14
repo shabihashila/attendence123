@@ -41,6 +41,20 @@ internal sealed class IamProcedures(ITenantDbConnectionFactory connections)
     }
 
     /// <summary>Tenant-bound: the user's permission codes in the bound tenant.</summary>
+    public async Task<bool> CanAccessAsync(int userId, int tenantId, bool isPlatformAdmin, CancellationToken ct)
+    {
+        await using var connection = await connections.OpenAsync(ct);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("iam.usp_User_CanAccessTenant",
+            new { UserId = userId, TenantId = tenantId, ExpectedPlatformAdmin = isPlatformAdmin }, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
+    public async Task<bool> IsGroupAdminAsync(int userId, CancellationToken ct)
+    {
+        await using var connection = await connections.OpenAsync(ct);
+        return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("iam.usp_User_IsGroupAdmin",
+            new { UserId = userId }, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
     public async Task<IReadOnlyList<string>> GetPermissionsAsync(int userId, CancellationToken ct)
     {
         await using var connection = await connections.OpenAsync(ct);
@@ -154,4 +168,4 @@ internal sealed record MenuRecord(int Id, int? ParentId, string Code, string Tit
     int SortOrder, string? FeatureCode);
 
 internal sealed record MemberRecord(int TenantUserId, int UserId, string DisplayName, string? Email, string? Phone, bool IsActive,
-    bool IsPlatformAdmin);
+    bool IsPlatformAdmin, bool IsGroupManaged,bool IsGroupProtected);

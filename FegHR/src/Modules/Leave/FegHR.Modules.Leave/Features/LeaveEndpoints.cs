@@ -21,6 +21,10 @@ internal static class LeavePermissions
     public const string ApplicationsRead = "leave.applications.read";
     public const string ApproveLevel1 = "leave.approve.l1";
     public const string ApproveLevel2 = "leave.approve.l2";
+    public const string ApproveLevel3 = "leave.approve.l3";
+    public const string ApproveLevel4 = "leave.approve.l4";
+    public const string ApproveLevel5 = "leave.approve.l5";
+    public const string ApproveFinal = "leave.approve.final";
     public const string Adjust = "leave.adjust";
     public const string SetupWrite = "leave.setup.write";
     public const string ReportsRead = "leave.reports.read";
@@ -50,9 +54,11 @@ internal sealed record ApplicationDto(
     int Id, int EmployeeId, string EmployeeCode, string EmployeeName, int LeaveTypeId, string LeaveType, string DayType,
     DateOnly StartDate, DateOnly EndDate, decimal Days, DateOnly AppliedOn, string? Reason, string? AddressDuringLeave,
     string Status, string CurrentStep, DateTimeOffset? Level1At, string? Level1Remarks, DateTimeOffset? DecidedAt,
-    string? DecisionRemarks, bool CanDecide);
+    string? DecisionRemarks, bool CanDecide,int? ApproverUserId,bool UsesApprovalWorkflow);
 
 internal sealed record DecisionRequest(bool Approve, [property: StringLength(500)] string? Remarks);
+internal sealed record SaveApprovalPolicy([property: Range(0,5)] int SupervisorLevels, int? FinalApproverUserId, bool IsEnabled, string? RowVersion);
+internal sealed record ReassignApproval([property:Range(1,int.MaxValue)] int NewUserId,[property:Required,StringLength(500)] string Reason,[property:Range(1,int.MaxValue)] int ExpectedApproverId);
 
 internal sealed record AdjustmentDto(int Id, int EmployeeId, string EmployeeName, int LeaveTypeId, string LeaveType, int Year,
     decimal Days, string? Reason, DateTimeOffset CreatedAt);
@@ -79,6 +85,30 @@ internal static class LeaveEndpoints
         MapSelfService(group);
         MapApprovals(group);
         MapAdjustments(group);
+        group.MapGet("/approval-policy", async (LeaveProcedures procedures, CancellationToken ct) =>
+        {
+            var row = (await procedures.PolicyAsync(null, null, false, null, ct)).SingleOrDefault();
+            return ApiResults.Ok(new { supervisorLevels = row?.SupervisorLevels ?? 1, finalApproverUserId = row?.FinalApproverUserId,
+                isEnabled = row?.IsEnabled ?? false, rowVersion = row is null ? null : Convert.ToBase64String(row.RowVersion) });
+        }).RequirePermission(LeavePermissions.SetupWrite);
+        group.MapPut("/approval-policy", async (SaveApprovalPolicy request, LeaveProcedures procedures, CancellationToken ct) =>
+        {
+            byte[]? version = null;
+            if (request.RowVersion is not null)
+            {
+                try { version = Convert.FromBase64String(request.RowVersion); } catch (FormatException) { return ApiResults.Fail("Reload the approval settings."); }
+                if (version.Length != 8) return ApiResults.Fail("Reload the approval settings.");
+            }
+            await procedures.PolicyAsync(request.SupervisorLevels, request.FinalApproverUserId, request.IsEnabled, version, ct);
+            return ApiResults.Ok("Approval settings saved. Existing applications keep their original route.");
+        }).Validate<SaveApprovalPolicy>().RequirePermission(LeavePermissions.SetupWrite);
+        group.MapGet("/applications/{id:int}/history", async (int id, LeaveProcedures procedures, CancellationToken ct) =>
+            ApiResults.Ok(await procedures.HistoryAsync(id, ct))).RequireStaff();
+        group.MapPost("/applications/{id:int}/reassign", async (int id,ReassignApproval request,LeaveProcedures procedures,CancellationToken ct)=>
+        {
+            await procedures.ReassignAsync(id,request.NewUserId,request.Reason,request.ExpectedApproverId,ct);
+            return ApiResults.Ok("Current approval reassigned and recorded in history.");
+        }).Validate<ReassignApproval>().RequirePermission(LeavePermissions.SetupWrite);
     }
 
     private static void MapTypes(RouteGroupBuilder group)
@@ -187,7 +217,7 @@ internal static class LeaveEndpoints
                 var paging = new PageRequest(page ?? 1, pageSize ?? 20);
                 var query = db.Applications.AsNoTracking().Where(a => a.IsActive);
                 if (!caller.SeesAll)
-                    query = query.Where(a => caller.ReportIds.Contains(a.EmployeeId));
+                    query = query.Where(a => caller.ReportIds.Contains(a.EmployeeId) || a.ApproverUserId == tenant.UserId);
                 if (!string.IsNullOrWhiteSpace(status)) query = query.Where(a => a.Status == status);
                 if (employeeId is { } id) query = query.Where(a => a.EmployeeId == id);
                 if (from is { } start) query = query.Where(a => a.EndDate >= start);
@@ -199,7 +229,7 @@ internal static class LeaveEndpoints
                 return ApiResults.Ok(new PagedResult<ApplicationDto>(await ToDtosAsync(rows, db, employees, caller.CanDecide, ct),
                     total, paging.SafePage, paging.SafePageSize));
             })
-            .RequirePermission(LeavePermissions.ApplicationsRead, LeavePermissions.ApproveLevel1, LeavePermissions.ApproveLevel2)
+            .RequirePermission(LeavePermissions.ApplicationsRead, LeavePermissions.ApproveLevel1, LeavePermissions.ApproveLevel2, LeavePermissions.ApproveLevel3, LeavePermissions.ApproveLevel4, LeavePermissions.ApproveLevel5, LeavePermissions.ApproveFinal)
             .WithName("ListLeaveApplications");
 
         // HR enters an application on an employee's behalf (a phoned-in sick day, for instance).
@@ -225,17 +255,19 @@ internal static class LeaveEndpoints
                 if (!caller.CanDecide(application))
                     return ApiResults.Fail("You cannot decide this application at its current step.", StatusCodes.Status403Forbidden);
 
-                var decided = await procedures.DecideAsync(id, request.Approve, caller.Level1, caller.Level2, caller.EmployeeId,
-                    request.Remarks, clock.UtcNowOffset(), tenant.UserId!.Value, ct);
+                var decided = application.UsesApprovalWorkflow
+                    ? await procedures.WorkflowDecideAsync(id, request.Approve, request.Remarks, clock.UtcNowOffset(), tenant.UserId!.Value, ct)
+                    : await procedures.DecideAsync(id, request.Approve, caller.Level1, caller.Level2, caller.EmployeeId,
+                        request.Remarks, clock.UtcNowOffset(), tenant.UserId!.Value, ct);
                 return ApiResults.Ok(decided, decided.Status switch
                 {
                     "Approved" => "Leave approved.",
                     "Rejected" => "Leave rejected.",
-                    _ => "Approved and sent to HR for the final decision."
+                    _ => $"Approved and sent to {decided.CurrentStep} for the next decision."
                 });
             })
             .Validate<DecisionRequest>()
-            .RequirePermission(LeavePermissions.ApproveLevel1, LeavePermissions.ApproveLevel2)
+            .RequirePermission(LeavePermissions.ApproveLevel1, LeavePermissions.ApproveLevel2, LeavePermissions.ApproveLevel3, LeavePermissions.ApproveLevel4, LeavePermissions.ApproveLevel5, LeavePermissions.ApproveFinal)
             .WithName("DecideLeaveApplication");
 
         group.MapGet("/balance/{employeeId:int}", async (int employeeId, int? year, ITenantDirectory tenants, LeaveProcedures procedures,
@@ -317,7 +349,7 @@ internal static class LeaveEndpoints
     }
 
     /// <summary>What the signed-in user may see and decide.</summary>
-    private sealed record Caller(int? EmployeeId, bool Level1, bool Level2, bool SeesAll, IReadOnlySet<int> ReportIds)
+    private sealed record Caller(int UserId, int? EmployeeId, bool Level1, bool Level2, bool SeesAll, IReadOnlySet<int> ReportIds, IReadOnlySet<string> Permissions)
     {
         /// <summary>
         /// HR (level 2) decides any pending application, at either step. A line manager decides the
@@ -325,7 +357,9 @@ internal static class LeaveEndpoints
         /// </summary>
         public bool CanDecide(LeaveApplication a)
             => a.Status == "Pending"
-               && (Level2 || (Level1 && a.CurrentStep == "Manager" && a.EmployeeId != EmployeeId && ReportIds.Contains(a.EmployeeId)));
+               && (a.UsesApprovalWorkflow
+                   ? a.ApproverUserId == UserId && a.EmployeeId != EmployeeId && Permissions.Contains(a.CurrentStep == "Final" ? LeavePermissions.ApproveFinal : "leave.approve." + a.CurrentStep.ToLowerInvariant())
+                   : Level2 || (Level1 && a.CurrentStep == "Manager" && a.EmployeeId != EmployeeId && ReportIds.Contains(a.EmployeeId)));
     }
 
     private static async Task<Caller> CallerAsync(ITenantContext tenant, IPermissionProvider permissions, IEmployeeDirectory employees,
@@ -335,8 +369,8 @@ internal static class LeaveEndpoints
         var me = await employees.GetByUserAsync(tenant.UserId.Value, ct);
         var reports = me is null ? [] : (await employees.GetDirectReportIdsAsync(me.Id, ct)).ToHashSet();
         var level2 = granted.Contains(LeavePermissions.ApproveLevel2);
-        return new Caller(me?.Id, granted.Contains(LeavePermissions.ApproveLevel1), level2,
-            level2 || granted.Contains(LeavePermissions.ApplicationsRead), reports);
+        return new Caller(tenant.UserId.Value, me?.Id, granted.Contains(LeavePermissions.ApproveLevel1), level2,
+            level2 || granted.Contains(LeavePermissions.ApplicationsRead), reports, granted);
     }
 
     private static async Task<List<ApplicationDto>> ToDtosAsync(IReadOnlyList<LeaveApplication> rows, LeaveDbContext db,
@@ -350,7 +384,7 @@ internal static class LeaveEndpoints
             return new ApplicationDto(a.Id, a.EmployeeId, person?.Code ?? string.Empty, person?.FullName ?? $"#{a.EmployeeId}",
                 a.LeaveTypeId, types.GetValueOrDefault(a.LeaveTypeId) ?? string.Empty, a.DayType, a.StartDate, a.EndDate, a.Days,
                 a.AppliedOn, a.Reason, a.AddressDuringLeave, a.Status, a.CurrentStep, a.Level1At, a.Level1Remarks, a.DecidedAt,
-                a.DecisionRemarks, canDecide(a));
+                a.DecisionRemarks, canDecide(a),a.ApproverUserId,a.UsesApprovalWorkflow);
         }).ToList();
     }
 

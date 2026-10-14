@@ -34,6 +34,8 @@ internal sealed class LeaveApplication : TenantEntity
     public string? AddressDuringLeave { get; set; }
     public string Status { get; set; } = "Pending";
     public string CurrentStep { get; set; } = "Manager";
+    public bool UsesApprovalWorkflow { get; set; }
+    public int? ApproverUserId { get; set; }
     public int? Level1By { get; set; }
     public DateTimeOffset? Level1At { get; set; }
     public string? Level1Remarks { get; set; }
@@ -105,6 +107,30 @@ internal sealed class LeaveDbContext(DbContextOptions<LeaveDbContext> options) :
 /// </summary>
 internal sealed class LeaveProcedures(ITenantDbConnectionFactory connections)
 {
+    public async Task ReassignAsync(int applicationId,int newUserId,string reason,int expectedApproverId,CancellationToken ct)
+    {
+        await using var c=await connections.OpenAsync(ct);
+        await c.ExecuteAsync(new CommandDefinition("leave.usp_Approval_Reassign",new {ApplicationId=applicationId,NewUserId=newUserId,Reason=reason,ExpectedApproverId=expectedApproverId},commandType:CommandType.StoredProcedure,cancellationToken:ct));
+    }
+    public async Task<IReadOnlyList<ApprovalPolicyRow>> PolicyAsync(int? levels, int? finalApproverUserId, bool isEnabled, byte[]? rowVersion, CancellationToken ct)
+    {
+        await using var c = await connections.OpenAsync(ct);
+        var p = new DynamicParameters(new { Levels = levels, FinalApproverUserId = finalApproverUserId, IsEnabled = isEnabled });
+        p.Add("RowVersion", rowVersion, DbType.Binary, size: 8);
+        return (await c.QueryAsync<ApprovalPolicyRow>(new CommandDefinition("leave.usp_ApprovalPolicy", p, commandType: CommandType.StoredProcedure, cancellationToken: ct))).ToList();
+    }
+
+    public async Task<IReadOnlyList<ApprovalHistoryRow>> HistoryAsync(int applicationId, CancellationToken ct)
+    {
+        await using var c = await connections.OpenAsync(ct);
+        return (await c.QueryAsync<ApprovalHistoryRow>(new CommandDefinition("leave.usp_ApprovalHistory", new { ApplicationId = applicationId }, commandType: CommandType.StoredProcedure, cancellationToken: ct))).ToList();
+    }
+
+    public async Task<DecidedApplication> WorkflowDecideAsync(int id, bool approve, string? remarks, DateTimeOffset now, int actorId, CancellationToken ct)
+    {
+        await using var c = await connections.OpenAsync(ct);
+        return await c.QuerySingleAsync<DecidedApplication>(new CommandDefinition("leave.usp_Workflow_Decide", new { ApplicationId = id, Approve = approve, Remarks = remarks, Now = now, ActorId = actorId }, commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
     public Task<IReadOnlyList<BalanceRow>> BalanceAsync(int employeeId, int year, CancellationToken ct)
         => ListAsync<BalanceRow>("leave.usp_Balance_Get", new { EmployeeId = employeeId, Year = year }, ct);
 
@@ -163,6 +189,9 @@ internal sealed class BalanceRow
     public decimal Pending { get; set; }
     public decimal? Remaining { get; set; }
 }
+
+internal sealed record ApprovalPolicyRow(int SupervisorLevels, int? FinalApproverUserId, bool IsEnabled, byte[] RowVersion);
+internal sealed record ApprovalHistoryRow(int Stage, string Approver, string Status, DateTimeOffset? DecidedAt, string? Remarks);
 
 internal sealed class StatementRow
 {

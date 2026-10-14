@@ -12,7 +12,7 @@ namespace FegHR.Modules.Iam.Security;
 /// delegate what they hold themselves: they cannot touch a role they belong to, grant or manage a
 /// permission they lack, assign or remove the administrator role, or change an administrator's or their own roles.
 /// </summary>
-internal sealed class DelegationGuard(IamDbContext db, ITenantContext tenant, IPermissionProvider permissions)
+internal sealed class DelegationGuard(IamDbContext db, ITenantContext tenant, IPermissionProvider permissions, IamProcedures procedures)
 {
     private Caller? _caller;
 
@@ -67,7 +67,7 @@ internal sealed class DelegationGuard(IamDbContext db, ITenantContext tenant, IP
         var tenantUserId = await db.TenantUsers.Where(tu => tu.UserId == userId).Select(tu => tu.Id).SingleAsync(ct);
         var roleIds = (await db.UserRoles.Where(ur => ur.TenantUserId == tenantUserId && ur.IsActive).Select(ur => ur.RoleId).ToListAsync(ct))
             .ToHashSet();
-        var isOwner = await db.Roles.AnyAsync(r => roleIds.Contains(r.Id) && r.Code == Role.OwnerCode && r.IsActive, ct);
+        var isOwner = await procedures.IsGroupAdminAsync(userId, ct) || await db.Roles.AnyAsync(r => roleIds.Contains(r.Id) && r.Code == Role.OwnerCode && r.IsActive, ct);
         return _caller = new Caller(userId, tenantUserId, isOwner, await permissions.GetPermissionsAsync(tenantId, userId, ct), roleIds);
     }
 

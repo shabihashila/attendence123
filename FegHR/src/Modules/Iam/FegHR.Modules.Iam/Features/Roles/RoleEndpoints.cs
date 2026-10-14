@@ -32,7 +32,7 @@ internal static class RoleEndpoints
     {
         group.MapGet("/permissions", async (IamDbContext db, CancellationToken ct) =>
                 // Product-owner permissions are never a company's to hand out.
-                ApiResults.Ok(await db.Permissions.AsNoTracking().Where(p => p.IsActive && p.Module != "owner")
+                ApiResults.Ok(await db.Permissions.AsNoTracking().Where(p => p.IsActive && p.Module != "owner" && p.Module != "group")
                     .OrderBy(p => p.Module).ThenBy(p => p.Code)
                     .Select(p => new PermissionDto(p.Code, p.Name, p.Module)).ToListAsync(ct)))
             .RequirePermission(IamPermissions.PermissionsRead, IamPermissions.RolesWrite)
@@ -142,7 +142,7 @@ internal static class RoleEndpoints
         IReadOnlyList<string> codes, CancellationToken ct)
     {
         var wanted = codes.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
-        var found = await db.Permissions.AsNoTracking().Where(p => p.IsActive && wanted.Contains(p.Code))
+        var found = await db.Permissions.AsNoTracking().Where(p => p.IsActive && p.Module != "owner" && p.Module != "group" && wanted.Contains(p.Code))
             .ToDictionaryAsync(p => p.Code, p => p.Id, ct);
         var unknown = wanted.Where(c => !found.ContainsKey(c)).ToList();
         return unknown.Count > 0

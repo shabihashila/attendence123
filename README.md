@@ -61,6 +61,9 @@ See [architecture](docs/ARCHITECTURE.md). Inherited scope includes organization,
 
 ## Main companies and child concerns
 
+Group administration, company context security, configurable L1–L5/Final leave approvals,
+RBAC scope matrix and deployment instructions: [Group architecture](docs/GROUP_ARCHITECTURE.md).
+
 Product Owner → Companies groups child concerns beside their main company. **Edit** changes the
 registered company name, main company assignment, and (for main companies) maximum child concerns.
 Names keep the same ID and slug; Company Branding remains separately editable. Blank limit means

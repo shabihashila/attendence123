@@ -120,7 +120,7 @@ interface Policy {
                             @if (c.parentTenantRefId !== null) {
                                 <p-tag value="Child concern" severity="secondary" /><div class="text-sm mt-1">{{ c.parentName }}</div>
                             } @else {
-                                <p-tag value="Main company" severity="info" /><div class="text-sm mt-1">{{ c.childCount }} / {{ c.maxChildConcerns === null ? 'Unlimited' : c.maxChildConcerns }} concerns</div>
+                                <p-tag [value]="c.childCount > 0 ? 'Master company' : 'Independent / main company'" severity="info" /><div class="text-sm mt-1">{{ c.childCount }} / {{ c.maxChildConcerns === null ? 'Unlimited' : c.maxChildConcerns }} concerns</div>
                             }
                         </td>
 

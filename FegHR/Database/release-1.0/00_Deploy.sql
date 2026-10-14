@@ -19,6 +19,10 @@ GO
 :r 12_CompanyHierarchy.sql
 :r 13_CompanyManagement.sql
 :r SeedData/01_Metadata.sql
+:r 14_GroupAccess.sql
+:r 15_ApprovalWorkflow.sql
+:r 16_GroupOperations.sql
+:r 17_CompanyAudit.sql
 COMMIT TRANSACTION;
 GO
 PRINT N'FegHR database deployed.';

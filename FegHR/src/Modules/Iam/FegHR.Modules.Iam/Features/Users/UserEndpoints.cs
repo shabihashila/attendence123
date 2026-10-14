@@ -17,7 +17,7 @@ namespace FegHR.Modules.Iam.Features.Users;
 
 /// <summary><see cref="IsProductOwner"/>: the platform's own owner account, managed by deployment, not by the company.</summary>
 internal sealed record MemberDto(int TenantUserId, int UserId, string DisplayName, string? Email, string? Phone,
-    bool IsActive, IReadOnlyList<int> RoleIds, IReadOnlyList<int> BranchIds, bool IsProductOwner);
+    bool IsActive, IReadOnlyList<int> RoleIds, IReadOnlyList<int> BranchIds, bool IsProductOwner, bool IsGroupManaged,bool IsGroupProtected);
 
 /// <summary>
 /// Adds a staff member. When the email or phone already belongs to a user
@@ -53,7 +53,7 @@ internal static class UserEndpoints
                         m.Phone, m.IsActive,
                         roles.Where(r => r.TenantUserId == m.TenantUserId).Select(r => r.RoleId).ToList(),
                         branches.Where(o => o.TenantUserId == m.TenantUserId).Select(o => o.BranchId).ToList(),
-                        m.IsPlatformAdmin))
+                        m.IsPlatformAdmin, m.IsGroupManaged,m.IsGroupProtected))
                     .OrderBy(m => m.DisplayName).ToList());
             })
             .RequirePermission(IamPermissions.UsersRead)
@@ -111,7 +111,10 @@ internal static class UserEndpoints
                     return ApiResults.NotFound("The staff member");
                 // The product owner reaches every company through deployment; a company cannot edit or
                 // remove that access, and it never stands in for the company's own owner.
-                var productOwners = (await procedures.ListMembersAsync(ct)).Where(m => m.IsPlatformAdmin)
+                var memberRows = await procedures.ListMembersAsync(ct);
+                if (memberRows.Any(m => m.TenantUserId == tenantUserId && m.IsGroupProtected))
+                    return ApiResults.Fail("This access is managed at group level. Use Group Console to change it.", StatusCodes.Status403Forbidden);
+                var productOwners = memberRows.Where(m => m.IsPlatformAdmin)
                     .Select(m => m.TenantUserId).ToHashSet();
                 if (productOwners.Contains(tenantUserId))
                     return ApiResults.Fail("The product owner's access is managed by the platform.", StatusCodes.Status403Forbidden);
@@ -132,6 +135,8 @@ internal static class UserEndpoints
                 var now = clock.UtcNowOffset();
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+                if(memberRows.Any(m=>m.TenantUserId==tenantUserId && m.IsGroupManaged))
+                    await db.Database.ExecuteSqlInterpolatedAsync($"EXEC iam.usp_Membership_MakeDirect @UserId={member.UserId}",ct);
                 var currentRoles = await db.UserRoles.Where(ur => ur.TenantUserId == tenantUserId).ToListAsync(ct);
                 db.UserRoles.RemoveRange(currentRoles.Where(ur => !request.RoleIds.Contains(ur.RoleId)));
                 db.UserRoles.AddRange(request.RoleIds.Distinct().Where(r => currentRoles.All(c => c.RoleId != r))
