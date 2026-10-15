@@ -399,3 +399,23 @@
     }
 
 }
+
+.layout-topbar .company-switchers { display: flex; align-items: center; gap: .75rem; }
+.layout-topbar .company-switcher { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+.layout-topbar .company-switcher label { font-size: .7rem; color: var(--text-color-secondary); }
+.layout-topbar .company-switcher .p-select { width: clamp(9rem, 14vw, 16rem); }
+@media (max-width: 767px) {
+    .layout-topbar { height: 8rem; align-items: flex-start; padding-top: .75rem; }
+    .layout-topbar .company-switchers { position: absolute; left: 1rem; right: 1rem; bottom: .5rem; }
+    .layout-topbar .company-switcher { flex: 1; }
+    .layout-topbar .company-switcher .p-select { width: 100%; }
+    .layout-main-container { padding-top: 9rem; }
+    .layout-sidebar { top: 9rem; height: calc(100vh - 10rem); }
+}
+@media (max-width: 767px) {
+    .layout-topbar .layout-topbar-logo-container { min-width: 0; align-items: center; }
+    .layout-topbar .layout-topbar-logo { font-size: 1rem; line-height: 1.2; max-width: 11rem; }
+    .layout-topbar .layout-topbar-logo app-styled-name { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .layout-topbar .layout-topbar-actions { gap: .4rem; flex-shrink: 0; }
+    .layout-topbar .layout-config-menu { gap: .4rem; }
+}

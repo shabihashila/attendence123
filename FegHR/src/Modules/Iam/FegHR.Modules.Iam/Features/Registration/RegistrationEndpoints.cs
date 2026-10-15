@@ -85,7 +85,7 @@ internal static class RegistrationEndpoints
 
                 Logger.Information("Company {TenantId} ({Slug}) registered by user {UserId}", created.TenantId, created.Slug, created.UserId);
                 var session = await auth.IssueSessionAsync(created.UserId, request.FullName.Trim(), false,
-                    new MembershipRecord(created.TenantId, created.Slug, request.CompanyName.Trim(), created.TenantUserId), ct);
+                    new MembershipRecord(created.TenantId, created.Slug, request.CompanyName.Trim(), created.TenantUserId, null, null, false), ct);
                 return ApiResults.Ok(new RegisterCompanyResponse(session, created.TrialEndsAt),
                     "Your company is ready. Welcome to your free trial.");
             })

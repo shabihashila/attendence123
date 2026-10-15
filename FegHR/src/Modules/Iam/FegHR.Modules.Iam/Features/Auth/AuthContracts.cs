@@ -18,9 +18,11 @@ internal sealed record SwitchTenantRequest(
     [property: Range(1, int.MaxValue)] int TenantId,
     [property: StringLength(200)] string? RefreshToken);
 
+internal sealed record DefaultCompanyRequest([property: Range(1, int.MaxValue)] int TenantId);
+
 internal sealed record RefreshRequest([property: Required, StringLength(200)] string RefreshToken);
 
-internal sealed record TenantOption(int TenantId, string Slug, string Name);
+internal sealed record TenantOption(int TenantId, string Slug, string Name, int? ParentTenantRefId, string? ParentName, bool HasChildConcerns, bool IsDefault = false);
 
 internal sealed record AuthSession(
     string AccessToken,
@@ -30,9 +32,8 @@ internal sealed record AuthSession(
     TenantOption Tenant);
 
 /// <summary>
-/// Sign-in result. Either <see cref="Session"/> is set, or the user belongs to
-/// several companies and must pick one: <see cref="RequiresTenantSelection"/>,
-/// <see cref="SelectionToken"/> (valid 5 minutes) and <see cref="Tenants"/> are set.
+/// Normal sign-in opens the user's saved accessible default in <see cref="Session"/>.
+/// Selection-ticket fields remain available for clients completing an older selection flow.
 /// </summary>
 internal sealed record LoginResponse(
     bool RequiresTenantSelection,

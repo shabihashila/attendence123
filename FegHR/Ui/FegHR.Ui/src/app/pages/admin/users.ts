@@ -34,6 +34,13 @@ interface Member {
 
 }
 
+interface CompanyAccess {
+    companyId: number; name: string; tenantUserId: number | null; isActive: boolean;
+    roleIds: number[]; branchIds: number[]; isProtected: boolean;
+    parentTenantRefId: number | null; parentName: string | null; isDefault: boolean; canBeDefault: boolean;
+    roles: { id: number; name: string }[]; branches: { id: number; name: string }[];
+}
+
 interface Role {
 
     id: number;
@@ -108,7 +115,7 @@ const MODULES: Record<string, string> = { platform: 'Company', iam: 'Users and r
 
                 </ng-template>
 
-                <ng-template #header><tr><th pSortableColumn="displayName"><div class="flex justify-between items-center gap-2">Name<span class="flex items-center"><p-sortIcon field="displayName" /><p-columnFilter type="text" field="displayName" display="menu" /></span></div></th><th pSortableColumn="email"><div class="flex justify-between items-center gap-2">Sign-in<span class="flex items-center"><p-sortIcon field="email" /><p-columnFilter type="text" field="email" display="menu" /></span></div></th><th>Roles</th><th pSortableColumn="isActive"><div class="flex justify-between items-center gap-2">Active<span class="flex items-center"><p-sortIcon field="isActive" /><p-columnFilter type="boolean" field="isActive" display="menu" /></span></div></th><th style="width:4rem"></th></tr></ng-template>
+                <ng-template #header><tr><th pSortableColumn="displayName"><div class="flex justify-between items-center gap-2">Name<span class="flex items-center"><p-sortIcon field="displayName" /><p-columnFilter type="text" field="displayName" display="menu" /></span></div></th><th pSortableColumn="email"><div class="flex justify-between items-center gap-2">Sign-in<span class="flex items-center"><p-sortIcon field="email" /><p-columnFilter type="text" field="email" display="menu" /></span></div></th><th>Roles</th><th pSortableColumn="isActive"><div class="flex justify-between items-center gap-2">Active<span class="flex items-center"><p-sortIcon field="isActive" /><p-columnFilter type="boolean" field="isActive" display="menu" /></span></div></th><th style="width:14rem"></th></tr></ng-template>
 
                 <ng-template #body let-m>
 
@@ -127,6 +134,7 @@ const MODULES: Record<string, string> = { platform: 'Company', iam: 'Users and r
                             @if (canWrite() && !m.isProductOwner && !m.isGroupProtected) {
 
                                 <p-button icon="pi pi-pencil" [rounded]="true" [text]="true" (onClick)="open(m)" ariaLabel="Edit user" />
+                                <p-button label="Company access" [text]="true" (onClick)="openAccess(m)" />
 
                             }
 
@@ -166,6 +174,11 @@ const MODULES: Record<string, string> = { platform: 'Company', iam: 'Users and r
 
                 <div class="col-span-12"><p-floatlabel variant="on"><p-multiselect inputId="roles" name="roles" [options]="roleOptions()" optionLabel="label" optionValue="value" [(ngModel)]="m.roleIds" required display="chip" appendTo="body" fluid /><label for="roles">Roles *</label></p-floatlabel></div>
 
+                <div class="col-span-12">
+                    <p-floatlabel variant="on"><p-multiselect inputId="branches" name="branches" [options]="branches()" optionLabel="name" optionValue="id" [(ngModel)]="m.branchIds" display="chip" appendTo="body" fluid /><label for="branches">Branches</label></p-floatlabel>
+                    <small class="text-muted-color">Leave empty for all current and future branches. Select branches to restrict access.</small>
+                </div>
+
                 @if (editing) {
 
                     <div class="col-span-12 flex items-center gap-2"><p-checkbox inputId="isActive" name="isActive" [binary]="true" [(ngModel)]="m.isActive" /><label for="isActive">Active (can sign in to this company)</label></div>
@@ -182,7 +195,34 @@ const MODULES: Record<string, string> = { platform: 'Company', iam: 'Users and r
 
             </form>
 
-        </p-dialog>`
+        </p-dialog>
+        <p-dialog [(visible)]="accessDialog" [header]="'Company access: ' + (accessMember?.displayName || '')" [modal]="true" [style]="{ width: '56rem' }" [breakpoints]="{ '960px': '95vw' }">
+            <p>Assign the same login to several companies. Each company has its own roles and branches. Save each company after changing it.</p>
+            <p-multiselect [options]="accessRows()" optionLabel="name" optionValue="companyId" [(ngModel)]="selectedCompanies" display="chip" placeholder="Choose companies" ariaLabel="Assigned companies" appendTo="body" [disabled]="accessBusy()" fluid />
+            <small class="block mt-2 text-muted-color">{{ accessScopeHint() }} To remove access, use Deactivate access on that company's card.</small>
+            @for (a of accessRows(); track a.companyId) {
+                @if (selectedCompanies.includes(a.companyId)) {
+                    <div class="border border-surface rounded-border p-4 mt-4">
+                        <div class="flex justify-between items-center gap-2 mb-4"><div><strong>{{a.name}}</strong>@if (a.parentName) { <small class="block text-muted-color">{{a.parentName}}</small> }@if (a.isDefault) { <p-tag value="Default company" severity="info" styleClass="mt-1" /> }</div><p-tag [value]="a.isActive ? 'Access active' : 'Access not active'" [severity]="a.isActive ? 'success' : 'secondary'" /></div>
+                        @if (a.isProtected) {
+                            <p>Access is managed by the platform or Group Console.</p>
+                        } @else {
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="block mb-2">Roles *</label><p-multiselect [options]="a.roles" optionLabel="name" optionValue="id" [(ngModel)]="a.roleIds" display="chip" appendTo="body" ariaLabel="Company roles" fluid /></div>
+                                <div><label class="block mb-2">Branches</label><p-multiselect [options]="a.branches" optionLabel="name" optionValue="id" [(ngModel)]="a.branchIds" display="chip" appendTo="body" ariaLabel="Company branches" fluid /><small class="text-muted-color">Empty means all current and future branches.</small></div>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-4">
+                                @if (a.isActive && a.canBeDefault && !a.isDefault) { <p-button label="Make default" [outlined]="true" [disabled]="accessBusy()" (onClick)="saveUserDefault(a)" /> }
+                                @if (a.isActive) { <p-button label="Deactivate access" severity="danger" [outlined]="true" [disabled]="accessBusy()" (onClick)="saveAccess(a, false)" /> }
+                                <p-button label="Save company access" icon="pi pi-check" [disabled]="!a.roleIds.length || accessBusy()" (onClick)="saveAccess(a, true)" />
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            @if (!accessRows().length) { <p>No companies available to manage.</p> }
+        </p-dialog>
+        `
 
 })
 
@@ -194,11 +234,22 @@ export class UsersPage {
 
     private session = inject(Session);
 
+    accessDialog = false;
+    accessMember: Member | null = null;
+    accessRows = signal<CompanyAccess[]>([]);
+    selectedCompanies: number[] = [];
+    accessBusy = signal(false);
+    branches = signal<{ id: number; name: string }[]>([]);
+
     members = signal<Member[]>([]);
 
     roles = signal<Role[]>([]);
 
     saving = signal(false);
+
+    accessScopeHint = computed(() => this.session.isOwner()
+        ? 'As owner/superadmin, you can assign access across all active companies.'
+        : 'Company administrators can assign access only within their current company and its child companies.');
 
     canWrite = computed(() => this.session.can('iam.users.write'));
 
@@ -234,6 +285,7 @@ export class UsersPage {
 
             const [members, roles] = await Promise.all([this.api.get<Member[]>('/api/iam/users'), this.session.can('iam.roles.read') ? this.api.get<Role[]>('/api/iam/roles') : Promise.resolve([])]);
 
+            this.branches.set(this.session.me()?.branches ?? []);
             this.members.set(members);
 
             this.roles.set(roles);
@@ -252,7 +304,7 @@ export class UsersPage {
 
         this.editing = member;
 
-        this.m = member ? { ...this.blank(), displayName: member.displayName, roleIds: [...member.roleIds], isActive: member.isActive } : this.blank();
+        this.m = member ? { ...this.blank(), displayName: member.displayName, roleIds: [...member.roleIds], branchIds: [...member.branchIds], isActive: member.isActive } : this.blank();
 
         this.dialog = true;
 
@@ -268,9 +320,9 @@ export class UsersPage {
 
             const result = this.editing
 
-                ? await this.api.put(`/api/iam/users/${this.editing.tenantUserId}`, { roleIds: this.m.roleIds, branchIds: this.editing.branchIds, isActive: this.m.isActive })
+                ? await this.api.put(`/api/iam/users/${this.editing.tenantUserId}`, { roleIds: this.m.roleIds, branchIds: this.m.branchIds, isActive: this.m.isActive })
 
-                : await this.api.post('/api/iam/users', { displayName: this.m.displayName, email: this.m.email || null, phone: this.m.phone || null, password: this.m.password || null, roleIds: this.m.roleIds, branchIds: [] });
+                : await this.api.post('/api/iam/users', { displayName: this.m.displayName, email: this.m.email || null, phone: this.m.phone || null, password: this.m.password || null, roleIds: this.m.roleIds, branchIds: this.m.branchIds });
 
             this.notify.ok(result.message ?? 'User saved.');
 
@@ -292,9 +344,53 @@ export class UsersPage {
 
 
 
+    async openAccess(member: Member) {
+        try {
+            const rows = await this.api.get<CompanyAccess[]>(`/api/iam/users/company-access/${member.userId}`);
+            this.accessMember = member;
+            this.accessRows.set(rows);
+            this.selectedCompanies = rows.filter(a => a.isActive).map(a => a.companyId);
+            this.accessDialog = true;
+        } catch (e) { this.notify.fail(e); }
+    }
+
+    async saveAccess(row: CompanyAccess, isActive: boolean) {
+        if (!this.accessMember) return;
+        this.accessBusy.set(true);
+        try {
+            await this.api.put(`/api/iam/users/company-access/${this.accessMember.userId}/${row.companyId}`, { roleIds: row.roleIds, branchIds: row.branchIds, isActive });
+            this.notify.ok(`${row.name}: access ${isActive ? 'saved' : 'deactivated'}.`);
+            await this.refreshAccessRow(row.companyId);
+            await this.load();
+        } catch (e) { this.notify.fail(e); }
+        finally { this.accessBusy.set(false); }
+    }
+
+    private async refreshAccessRow(companyId?: number) {
+        if (!this.accessMember) return;
+        const latest = await this.api.get<CompanyAccess[]>(`/api/iam/users/company-access/${this.accessMember.userId}`);
+        this.accessRows.update(rows => rows.map(row => {
+            const updated = latest.find(a => a.companyId === row.companyId);
+            if (!updated) return row;
+            return companyId === row.companyId ? updated : { ...row, isDefault: updated.isDefault, canBeDefault: updated.canBeDefault };
+        }));
+    }
+
+    async saveUserDefault(row: CompanyAccess) {
+        if (!this.accessMember) return;
+        this.accessBusy.set(true);
+        try {
+            const result = await this.api.put(`/api/iam/users/company-access/${this.accessMember.userId}/default`, { tenantId: row.companyId });
+            this.notify.ok(result.message);
+            await this.refreshAccessRow();
+            if (this.accessMember.userId === this.session.me()?.user.id) await this.api.loadShell();
+        } catch (e) { this.notify.fail(e); }
+        finally { this.accessBusy.set(false); }
+    }
+
     private blank() {
 
-        return { displayName: '', email: '', phone: '', password: '', roleIds: [] as number[], isActive: true };
+        return { displayName: '', email: '', phone: '', password: '', roleIds: [] as number[], branchIds: [] as number[], isActive: true };
 
     }
 

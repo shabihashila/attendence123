@@ -35,6 +35,10 @@ export interface Paged<T> {
 }
 
 export interface TenantOption {
+    parentTenantRefId: number | null;
+    parentName: string | null;
+    hasChildConcerns: boolean;
+    isDefault: boolean;
 
     tenantId: number;
 

@@ -46,6 +46,18 @@ internal static class AuthEndpoints
             .RequireStaff()
             .WithName("ListMyTenants");
 
+        session.MapGet("/default-company", async (ITenantContext tenant, AuthService service, CancellationToken ct) =>
+            ApiResults.Ok(await service.GetTenantOptionsAsync(tenant.UserId!.Value, ct)))
+            .RequireStaff().WithName("GetDefaultCompanyOptions");
+
+        session.MapPut("/default-company", async (DefaultCompanyRequest request, ITenantContext tenant,
+            FegHR.Modules.Iam.Persistence.IamProcedures procedures, CancellationToken ct) =>
+        {
+            await procedures.GetTenantsAsync(tenant.UserId!.Value, ct);
+            var id = await procedures.ResolveDefaultCompanyAsync(tenant.UserId.Value, ct, request.TenantId);
+            return ApiResults.Ok(new { tenantId = id }, "Default company saved. It will be used the next time you sign in.");
+        }).Validate<DefaultCompanyRequest>().RequireStaff().WithName("SaveMyDefaultCompany");
+
         session.MapPost("/switch-tenant", async (SwitchTenantRequest request, ITenantContext tenant, AuthService service,
                 CancellationToken ct) => ToResult(await service.SwitchTenantAsync(tenant.UserId!.Value, request, ct)))
             .Validate<SwitchTenantRequest>()

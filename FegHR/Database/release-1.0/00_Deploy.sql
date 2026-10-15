@@ -23,6 +23,8 @@ GO
 :r 15_ApprovalWorkflow.sql
 :r 16_GroupOperations.sql
 :r 17_CompanyAudit.sql
+:r 18_CompanySwitcher.sql
+:r 19_CompanyAccessDefaults.sql
 COMMIT TRANSACTION;
 GO
 PRINT N'FegHR database deployed.';

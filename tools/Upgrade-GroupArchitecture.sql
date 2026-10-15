@@ -20,6 +20,8 @@ GO
 :r 15_ApprovalWorkflow.sql
 :r 16_GroupOperations.sql
 :r 17_CompanyAudit.sql
+:r 18_CompanySwitcher.sql
+:r 19_CompanyAccessDefaults.sql
 CREATE TABLE #LeaveAfter(Id INT NOT NULL,Status NVARCHAR(20),CurrentStep NVARCHAR(20));
 DECLARE @AfterPrior sql_variant=SESSION_CONTEXT(N'FegHR.TenantId'),@AfterTid INT;
 DECLARE afterCompanies CURSOR LOCAL FAST_FORWARD FOR SELECT Id FROM platform.Tenants;

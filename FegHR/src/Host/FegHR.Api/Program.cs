@@ -102,7 +102,8 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseMiddleware<CompanyAuditMiddleware>();
 app.UseAuthorization();
 app.UseMiddleware<LicenseGuardMiddleware>();
-app.UseRateLimiter();
+if (app.Environment.IsProduction())
+    app.UseRateLimiter();
 
 foreach (var module in modules)
 {

@@ -92,3 +92,5 @@ Regression checks use a disposable database and refuse to replace any existing t
 $env:SeedTimestamp = [DateTimeOffset]::UtcNow.ToString('o')
 sqlcmd -S localhost -d master -E -C -b -I -i ..\..\..\tools\Test-CompanyManagement.sql
 ```
+
+Beginner walkthrough of the Group Console, Attendance Rules, Companies and company/branch assignments: [Companies and access guide](docs/COMPANIES-AND-ACCESS-GUIDE.md).

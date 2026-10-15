@@ -10,6 +10,8 @@ GO
 :r 14_GroupAccess.sql
 :r 15_ApprovalWorkflow.sql
 :r 16_GroupOperations.sql
+:r 18_CompanySwitcher.sql
+:r 19_CompanyAccessDefaults.sql
 GO
 SET NOCOUNT ON;
 DECLARE @Now DATETIMEOFFSET(3)=SYSDATETIMEOFFSET(),@Today DATE=CONVERT(date,SYSDATETIMEOFFSET());

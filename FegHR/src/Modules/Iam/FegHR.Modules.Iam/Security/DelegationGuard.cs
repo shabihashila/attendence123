@@ -15,6 +15,15 @@ namespace FegHR.Modules.Iam.Security;
 internal sealed class DelegationGuard(IamDbContext db, ITenantContext tenant, IPermissionProvider permissions, IamProcedures procedures)
 {
     private Caller? _caller;
+    private bool _verifiedHierarchyAdministrator;
+
+    // Only CompanyAccessEndpoints calls this after checking the source company boundary.
+    internal int? AdministrationTenantId { get; private set; }
+    internal void UseVerifiedHierarchyAuthority(int sourceTenantId)
+    {
+        AdministrationTenantId = sourceTenantId;
+        _verifiedHierarchyAdministrator = true;
+    }
 
     private sealed record Caller(int UserId, int TenantUserId, bool IsOwner, IReadOnlySet<string> Permissions, IReadOnlySet<int> RoleIds);
 
@@ -36,6 +45,7 @@ internal sealed class DelegationGuard(IamDbContext db, ITenantContext tenant, IP
     /// <summary>Null when allowed; otherwise the message to show.</summary>
     public async Task<string?> CheckMemberChangeAsync(TenantUser? member, IReadOnlyCollection<int> requestedRoleIds, CancellationToken ct)
     {
+        if (_verifiedHierarchyAdministrator) return null;
         var caller = await CallerAsync(ct);
         if (caller.IsOwner)
             return null;

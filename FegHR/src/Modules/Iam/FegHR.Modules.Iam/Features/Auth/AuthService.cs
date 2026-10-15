@@ -53,14 +53,12 @@ internal sealed class AuthService(
             return AuthOutcome<LoginResponse>.Fail(StatusCodes.Status403Forbidden,
                 "Your account is not linked to an active company.");
 
-        if (memberships.Count == 1)
-        {
-            var session = await IssueSessionAsync(user.Id, user.DisplayName, user.IsPlatformAdmin, memberships[0], ct);
-            return AuthOutcome<LoginResponse>.Ok(new LoginResponse(false, session, null, null));
-        }
-
-        return AuthOutcome<LoginResponse>.Ok(new LoginResponse(true, null, tokens.CreateSelectionTicket(user.Id),
-            memberships.Select(ToOption).ToList()));
+        var defaultId = await procedures.ResolveDefaultCompanyAsync(user.Id, ct);
+        var membership = memberships.FirstOrDefault(m => m.TenantId == defaultId);
+        if (membership is null)
+            return AuthOutcome<LoginResponse>.Fail(StatusCodes.Status403Forbidden, "Your company access changed. Please sign in again.");
+        var session = await IssueSessionAsync(user.Id, user.DisplayName, user.IsPlatformAdmin, membership, ct);
+        return AuthOutcome<LoginResponse>.Ok(new LoginResponse(false, session, null, null));
     }
 
     public async Task<AuthOutcome<AuthSession>> SelectTenantAsync(SelectTenantRequest request, CancellationToken ct)
@@ -78,7 +76,11 @@ internal sealed class AuthService(
 
     /// <summary>The companies the signed-in user can switch to, for the top-bar switcher.</summary>
     public async Task<IReadOnlyList<TenantOption>> GetTenantOptionsAsync(int userId, CancellationToken ct)
-        => (await procedures.GetTenantsAsync(userId, ct)).Select(ToOption).OrderBy(t => t.Name).ToList();
+    {
+        var memberships = await procedures.GetTenantsAsync(userId, ct);
+        var defaultId = await procedures.ResolveDefaultCompanyAsync(userId, ct);
+        return memberships.Select(m => ToOption(m) with { IsDefault = m.TenantId == defaultId }).OrderBy(t => t.Name).ToList();
+    }
 
     /// <summary>
     /// Issues a session in another company without a new sign-in, the way DailyCommerce's
@@ -196,5 +198,5 @@ internal sealed class AuthService(
         return new AuthSession(access.Token, access.ExpiresAt, refresh.Token, refresh.ExpiresAt, ToOption(membership));
     }
 
-    private static TenantOption ToOption(MembershipRecord m) => new(m.TenantId, m.Slug, m.Name);
+    private static TenantOption ToOption(MembershipRecord m) => new(m.TenantId, m.Slug, m.Name, m.ParentTenantRefId, m.ParentName, m.HasChildConcerns);
 }

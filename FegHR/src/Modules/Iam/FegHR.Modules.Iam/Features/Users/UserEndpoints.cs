@@ -43,6 +43,7 @@ internal static class UserEndpoints
     public static void Map(RouteGroupBuilder group)
     {
         var users = group.MapGroup("/users");
+        CompanyAccessEndpoints.Map(users);
 
         users.MapGet("/", async (IamProcedures procedures, IamDbContext db, CancellationToken ct) =>
             {
@@ -59,9 +60,20 @@ internal static class UserEndpoints
             .RequirePermission(IamPermissions.UsersRead)
             .WithName("ListMembers");
 
-        users.MapPost("/", async (CreateMemberRequest request, IamProcedures procedures, IamDbContext db,
+        users.MapPost("/", CreateAsync)
+            .Validate<CreateMemberRequest>()
+            .RequirePermission(IamPermissions.UsersWrite)
+            .WithName("CreateMember");
+
+        users.MapPut("/{tenantUserId:int}", UpdateAsync)
+            .Validate<UpdateMemberRequest>()
+            .RequirePermission(IamPermissions.UsersWrite)
+            .WithName("UpdateMember");
+    }
+
+    internal static async Task<IResult> CreateAsync(CreateMemberRequest request, IamProcedures procedures, IamDbContext db,
                 ITenantDirectory tenants, ITenantContext tenant, PermissionGenerations generations, IAppTimeProvider clock,
-                DelegationGuard guard, CancellationToken ct) =>
+                DelegationGuard guard, CancellationToken ct)
             {
                 if (await guard.CheckMemberChangeAsync(null, request.RoleIds, ct) is { } denied)
                     return ApiResults.Fail(denied, StatusCodes.Status403Forbidden);
@@ -95,16 +107,15 @@ internal static class UserEndpoints
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
                 generations.Invalidate(tenant.RequiredTenantId);
+                await procedures.GetTenantsAsync(userId, ct);
+                await procedures.ResolveDefaultCompanyAsync(userId, ct);
 
                 return ApiResults.Created($"/api/iam/users/{tenantUserId}", new { tenantUserId, userId, linkedExisting = existing is not null });
-            })
-            .Validate<CreateMemberRequest>()
-            .RequirePermission(IamPermissions.UsersWrite)
-            .WithName("CreateMember");
+            }
 
-        users.MapPut("/{tenantUserId:int}", async (int tenantUserId, UpdateMemberRequest request, IamDbContext db,
+    internal static async Task<IResult> UpdateAsync(int tenantUserId, UpdateMemberRequest request, IamDbContext db,
                 IamProcedures procedures, ITenantDirectory tenants, ITenantContext tenant, PermissionGenerations generations,
-                IAppTimeProvider clock, DelegationGuard guard, CancellationToken ct) =>
+                IAppTimeProvider clock, DelegationGuard guard, CancellationToken ct)
             {
                 var member = await db.TenantUsers.SingleOrDefaultAsync(tu => tu.Id == tenantUserId, ct);
                 if (member is null)
@@ -136,7 +147,7 @@ internal static class UserEndpoints
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
                 if(memberRows.Any(m=>m.TenantUserId==tenantUserId && m.IsGroupManaged))
-                    await db.Database.ExecuteSqlInterpolatedAsync($"EXEC iam.usp_Membership_MakeDirect @UserId={member.UserId}",ct);
+                    await db.Database.ExecuteSqlInterpolatedAsync($"EXEC iam.usp_Membership_MakeDirect @UserId={member.UserId}, @AdministrationTenantId={guard.AdministrationTenantId}",ct);
                 var currentRoles = await db.UserRoles.Where(ur => ur.TenantUserId == tenantUserId).ToListAsync(ct);
                 db.UserRoles.RemoveRange(currentRoles.Where(ur => !request.RoleIds.Contains(ur.RoleId)));
                 db.UserRoles.AddRange(request.RoleIds.Distinct().Where(r => currentRoles.All(c => c.RoleId != r))
@@ -158,12 +169,10 @@ internal static class UserEndpoints
 
                 await transaction.CommitAsync(ct);
                 generations.Invalidate(tenant.RequiredTenantId);
+                await procedures.GetTenantsAsync(member.UserId, ct);
+                await procedures.ResolveDefaultCompanyAsync(member.UserId, ct);
                 return ApiResults.Ok("Staff member updated.");
-            })
-            .Validate<UpdateMemberRequest>()
-            .RequirePermission(IamPermissions.UsersWrite)
-            .WithName("UpdateMember");
-    }
+            }
 
     private static async Task<string?> ValidateAssignmentsAsync(IamDbContext db, ITenantDirectory tenants,
         IReadOnlyList<int> roleIds, IReadOnlyList<int>? branchIds, CancellationToken ct)

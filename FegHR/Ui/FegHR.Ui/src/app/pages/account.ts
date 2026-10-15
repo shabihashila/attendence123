@@ -1,8 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 
 import { PasswordModule } from 'primeng/password';
 
-import { Api, Session } from '@/app/core/api';
+import { Api, Session, TenantOption } from '@/app/core/api';
 
 import { Notify, PageHeader, UI } from '@/app/core/ui';
 
@@ -74,6 +74,22 @@ import { Notify, PageHeader, UI } from '@/app/core/ui';
 
             </div>
 
+            <div class="col-span-12">
+                <form class="card flex flex-col gap-4" (ngSubmit)="saveDefaults()">
+                    <h2 class="text-xl font-semibold m-0">Default company</h2>
+                    <p class="m-0 text-muted-color">Start here when you sign in. You can still switch companies from the top bar without changing this default.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label for="defaultMainCompany" class="block mb-2">Default main company</label>
+                            <p-select inputId="defaultMainCompany" name="defaultMainCompany" [options]="defaultMains()" optionLabel="name" optionValue="id" [ngModel]="defaultMainId()" (ngModelChange)="chooseDefaultMain($event)" appendTo="body" fluid /></div>
+                        @if (defaultChildren().length) {
+                            <div><label for="defaultChildCompany" class="block mb-2">Default child company</label>
+                                <p-select inputId="defaultChildCompany" name="defaultChildCompany" [options]="defaultChildren()" optionLabel="name" optionValue="tenantId" [ngModel]="defaultChildId()" (ngModelChange)="defaultChildId.set($event)" appendTo="body" fluid /></div>
+                        }
+                    </div>
+                    <small class="text-muted-color">Only your active company access is listed. A main-company name can group accessible children without granting access to the main company's records.</small>
+                    <div><p-button type="submit" label="Save default company" icon="pi pi-check" [loading]="savingDefaults()" [disabled]="!defaultMainId() || savingDefaults()" /></div>
+                </form>
+            </div>
         </div>`
 
 })
@@ -93,6 +109,51 @@ export class AccountPage {
     next = '';
 
 
+
+    defaultOptions = signal<TenantOption[]>([]);
+    defaultMainId = signal<number | null>(null);
+    defaultChildId = signal<number | null>(null);
+    savingDefaults = signal(false);
+    defaultMains = computed(() => {
+        const roots = new Map<number, { id: number; name: string }>();
+        for (const t of this.defaultOptions()) {
+            const id = t.parentTenantRefId ?? t.tenantId;
+            roots.set(id, { id, name: t.parentTenantRefId ? (t.parentName || 'Main company') : t.name });
+        }
+        return [...roots.values()].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    defaultChildren = computed(() => this.defaultOptions().filter(t => t.parentTenantRefId === this.defaultMainId()));
+
+    constructor() { void this.loadDefaults(); }
+
+    async loadDefaults() {
+        try {
+            const options = await this.api.get<TenantOption[]>('/api/iam/session/default-company');
+            this.defaultOptions.set(options);
+            const selected = options.find(t => t.isDefault);
+            this.defaultMainId.set(selected ? (selected.parentTenantRefId ?? selected.tenantId) : null);
+            this.defaultChildId.set(selected?.parentTenantRefId ? selected.tenantId : null);
+        } catch (e) { this.notify.fail(e); }
+    }
+
+    chooseDefaultMain(id: number) {
+        this.defaultMainId.set(id);
+        const children = this.defaultChildren();
+        this.defaultChildId.set((children.find(t => t.isDefault) ?? children[0])?.tenantId ?? null);
+    }
+
+    async saveDefaults() {
+        const tenantId = this.defaultChildId() ?? this.defaultMainId();
+        if (!tenantId) return;
+        this.savingDefaults.set(true);
+        try {
+            const result = await this.api.put('/api/iam/session/default-company', { tenantId });
+            this.notify.ok(result.message);
+            await this.loadDefaults();
+            await this.api.loadShell();
+        } catch (e) { this.notify.fail(e); }
+        finally { this.savingDefaults.set(false); }
+    }
 
     async change() {
 

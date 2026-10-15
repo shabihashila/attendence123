@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 
 import { Router, RouterModule } from '@angular/router';
 
@@ -60,33 +60,22 @@ import { Notify, StyledName } from '@/app/core/ui';
 
             }
 
-            @if (session.tenants().length > 1) {
-
-                <p-select
-
-                    class="hidden md:inline-flex"
-
-                    [options]="session.tenants()"
-
-                    optionLabel="name"
-
-                    optionValue="tenantId"
-
-                    [ngModel]="session.me()?.tenant?.id"
-
-                    (ngModelChange)="switchCompany($event)"
-
-                    [filter]="session.tenants().length > 8"
-
-                    filterBy="name"
-
-                    ariaLabel="Company"
-
-                    [style]="{ minWidth: '14rem' }"
-
-                />
-
-            }
+            <div class="company-switchers">
+                <div class="company-switcher">
+                    <label for="mainCompany">Main company</label>
+                    <p-select inputId="mainCompany" [options]="mainCompanies()" optionLabel="name" optionValue="id"
+                        [ngModel]="mainCompanyId()" (ngModelChange)="switchMainCompany($event)"
+                        [filter]="mainCompanies().length > 8" filterBy="name" [disabled]="switching()" appendTo="body" />
+                </div>
+                @if (hasConcerns()) {
+                    <div class="company-switcher">
+                        <label for="workingCompany">Company / child concern</label>
+                        <p-select inputId="workingCompany" [options]="workingCompanies()" optionLabel="name" optionValue="tenantId"
+                            [ngModel]="session.me()?.tenant?.id" (ngModelChange)="switchCompany($event)"
+                            [filter]="workingCompanies().length > 8" filterBy="name" [disabled]="switching()" appendTo="body" />
+                    </div>
+                }
+            </div>
 
             <div class="layout-config-menu">
 
@@ -182,6 +171,31 @@ export class AppTopbar {
 
 
 
+    switching = signal(false);
+    mainCompanyId = computed(() => {
+        const current = this.session.tenants().find(t => t.tenantId === this.session.me()?.tenant?.id);
+        return current?.parentTenantRefId ?? current?.tenantId ?? null;
+    });
+    mainCompanies = computed(() => {
+        const companies = new Map<number, { id: number; name: string }>();
+        for (const t of this.session.tenants()) {
+            const id = t.parentTenantRefId ?? t.tenantId;
+            companies.set(id, { id, name: t.parentTenantRefId ? (t.parentName || 'Main company') : t.name });
+        }
+        return [...companies.values()].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    workingCompanies = computed(() => this.session.tenants().filter(t =>
+        t.tenantId === this.mainCompanyId() || t.parentTenantRefId === this.mainCompanyId()));
+    hasConcerns = computed(() => this.workingCompanies().some(t => t.parentTenantRefId != null || t.hasChildConcerns));
+
+    async switchMainCompany(id: number) {
+        if (id === this.mainCompanyId()) return;
+        const options = this.session.tenants();
+        const target = options.find(t => t.isDefault && (t.tenantId === id || t.parentTenantRefId === id))
+            ?? options.find(t => t.parentTenantRefId === id) ?? options.find(t => t.tenantId === id);
+        if (target) await this.switchCompany(target.tenantId);
+    }
+
     /** A reminder while the trial or licence runs out, and a warning once it has. */
 
     licenceNote = computed(() => {
@@ -218,7 +232,9 @@ export class AppTopbar {
 
     async switchCompany(tenantId: number) {
 
-        if (tenantId === this.session.me()?.tenant?.id) return;
+        if (this.switching() || tenantId === this.session.me()?.tenant?.id) return;
+
+        this.switching.set(true);
 
         try {
 
@@ -236,6 +252,8 @@ export class AppTopbar {
 
             this.notify.fail(e);
 
+        } finally {
+            this.switching.set(false);
         }
 
     }

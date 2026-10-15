@@ -40,6 +40,21 @@ internal sealed class IamProcedures(ITenantDbConnectionFactory connections)
         return rows.ToList();
     }
 
+    public async Task<IReadOnlyList<ManagedCompanyRecord>> GetManagedCompaniesAsync(int actorId, CancellationToken ct)
+    {
+        await using var connection = await connections.OpenAsync(ct);
+        return (await connection.QueryAsync<ManagedCompanyRecord>(new CommandDefinition("iam.usp_User_ManagedCompanies",
+            new { ActorId = actorId }, commandType: CommandType.StoredProcedure, cancellationToken: ct))).ToList();
+    }
+
+    public async Task<int?> ResolveDefaultCompanyAsync(int userId, CancellationToken ct, int? tenantId = null)
+    {
+        await using var connection = await connections.OpenAsync(ct);
+        return await connection.ExecuteScalarAsync<int?>(new CommandDefinition("iam.usp_User_DefaultCompany",
+            new { UserId = userId, TenantId = tenantId, Save = tenantId.HasValue },
+            commandType: CommandType.StoredProcedure, cancellationToken: ct));
+    }
+
     /// <summary>Tenant-bound: the user's permission codes in the bound tenant.</summary>
     public async Task<bool> CanAccessAsync(int userId, int tenantId, bool isPlatformAdmin, CancellationToken ct)
     {
@@ -160,7 +175,8 @@ internal sealed record LoginRecord(int Id, string DisplayName, string? PasswordH
 
 internal sealed record UserRecord(int Id, string DisplayName, string? Email, string? Phone, bool IsActive, bool IsPlatformAdmin);
 
-internal sealed record MembershipRecord(int TenantId, string Slug, string Name, int TenantUserId);
+internal sealed record MembershipRecord(int TenantId, string Slug, string Name, int TenantUserId,
+    int? ParentTenantRefId, string? ParentName, bool HasChildConcerns);
 
 internal sealed record RegisteredCompany(int TenantId, string Slug, int UserId, int TenantUserId, DateTimeOffset TrialEndsAt);
 
@@ -169,3 +185,5 @@ internal sealed record MenuRecord(int Id, int? ParentId, string Code, string Tit
 
 internal sealed record MemberRecord(int TenantUserId, int UserId, string DisplayName, string? Email, string? Phone, bool IsActive,
     bool IsPlatformAdmin, bool IsGroupManaged,bool IsGroupProtected);
+
+internal sealed record ManagedCompanyRecord(int TenantId, string Name, int? ParentTenantRefId, string? ParentName, bool HasChildConcerns, bool FullAdministration);
